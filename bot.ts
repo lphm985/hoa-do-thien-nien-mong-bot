@@ -31,3 +31,16 @@ client.on("messageCreate", async (message) => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
+
+import http from "node:http";
+
+// Giữ cổng HTTP để nền tảng hosting không tắt bot
+const port = process.env.PORT || 3000;
+http
+  .createServer((_req, res) => {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("Bot Hoa Do Thien Nien Mong dang hoat dong!");
+  })
+  .listen(port, () => {
+    console.log(`Healthcheck server chạy tại cổng ${port}`);
+  });
