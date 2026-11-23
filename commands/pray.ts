@@ -1,6 +1,12 @@
 import type { Message } from "discord.js";
 import { COOLDOWN_SECONDS, supabase } from "../supabase.js";
 import { grantItemToUser, rollPrayItemDrop } from "../items.js";
+export const commandInfo = {
+  name: "pray",
+  command: "!pray [@user]",
+  description: "Cầu nguyện cho bản thân hoặc người khác, nhận điểm và cơ hội rơi vật phẩm.",
+};
+// Đổi: export async function handlePrayCommand -> export async function execute
 
 type PrayOutcome = {
   text: string;
@@ -52,7 +58,7 @@ const PRAY_FOR_OTHER_OUTCOMES: PrayOutcome[] = [
   },
 ];
 
-export async function handlePrayCommand(message: Message): Promise<void> {
+export async function execute(message: Message): Promise<void> {
   const targetUser = message.mentions.users.first();
 
   // Trường hợp 1: Cầu nguyện cho bản thân (!pray)
