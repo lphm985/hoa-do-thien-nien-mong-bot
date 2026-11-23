@@ -20,6 +20,11 @@ export const HELP_ENTRIES: HelpEntry[] = [
     command: "!pray",
     description: "Cầu nguyện ngẫu nhiên lời thoại, cộng hoặc trừ điểm cá nhân.",
   },
+  {
+    command: "!stats [@user]",
+    description: "Xem bảng thông tin, ảnh đại diện và tổng điểm của bản thân hoặc người khác.",
+  },
+  
   // Sau này có lệnh mới thì thêm tiếp vào đây, ví dụ:
   // {
   //   command: "!mypray",
