@@ -1,25 +1,48 @@
-import type { Message } from "discord.js";
+import { EmbedBuilder, type Message } from "discord.js";
 import { getAllCommands, type CommandMeta } from "../commandLoader.js";
 
 export const commandInfo: CommandMeta = {
   name: "help",
   command: "!help",
-  description: "Xem danh sách toàn bộ lệnh hiện có (tự động cập nhật A → Z).",
+  description: "Xem bảng danh sách toàn bộ lệnh hiện có (tự động cập nhật A → Z).",
 };
 
 export async function execute(message: Message): Promise<void> {
   const commands = await getAllCommands();
 
+  const embed = new EmbedBuilder()
+    .setColor(0x10b981)
+    .setTitle("Bảng Lệnh — Hoạ Đồ Thiên Niên Mộng")
+    .setThumbnail(message.client.user?.displayAvatarURL({ size: 256 }) ?? null)
+    .setFooter({
+      text: `Tổng cộng ${commands.length} lệnh • Sắp xếp A → Z`,
+      iconURL: message.client.user?.displayAvatarURL(),
+    })
+    .setTimestamp();
+
   if (commands.length === 0) {
-    await message.reply("Chưa tìm thấy lệnh nào trong thư mục `commands/`.");
-    return;
+    embed.setDescription("Chưa tìm thấy lệnh nào trong thư mục `commands/`.");
+  } else {
+    embed.setDescription(
+      "Dưới đây là toàn bộ các lệnh hiện có trong hệ thống:"
+    );
+
+    // Discord giới hạn tối đa 25 fields mỗi Embed
+    const fields = commands.slice(0, 25).map((c) => {
+      const aliasText =
+        c.meta.aliases && c.meta.aliases.length > 0
+          ? ` *(tên khác: ${c.meta.aliases.map((a) => `\`!${a}\``).join(", ")})*`
+          : "";
+
+      return {
+        name: `\`${c.meta.command}\`${aliasText}`,
+        value: c.meta.description || "Không có mô tả.",
+        inline: false,
+      };
+    });
+
+    embed.addFields(fields);
   }
 
-  const lines = commands.map(
-    (c) => `• \`${c.meta.command}\` — ${c.meta.description}`
-  );
-
-  await message.reply(
-    `**Danh sách lệnh của Hoạ Đồ Thiên Niên Mộng (A → Z):**\n${lines.join("\n")}`
-  );
+  await message.reply({ embeds: [embed] });
 }
