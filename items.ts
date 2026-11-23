@@ -54,7 +54,8 @@ export async function getItemByCode(code: string): Promise<ItemDefinition | unde
   const items = await getActiveItems();
   return items.find((item) => item.code === code);
 }
-export async function normalizeText(str: string): string {
+
+function normalizeText(str: string): string {
   return str
     .normalize("NFC")
     .trim()
