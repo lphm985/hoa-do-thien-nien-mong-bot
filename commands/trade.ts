@@ -8,6 +8,19 @@ import {
 } from "discord.js";
 import { findItemByCodeOrName, getItemByCode } from "../items.js";
 import { supabase } from "../supabase.js";
+export const commandInfo = {
+  name: "trade",
+  command: "!trade @user <món_bạn> [sl1] <món_họ> [sl2]",
+  description: "Đề nghị trao đổi vật phẩm 2 chiều (cần đối phương bấm Đồng ý).",
+};
+
+export const buttonPrefixes = [
+  "trade_accept:",
+  "trade_decline:",
+  "trade_cancel:",
+];
+// Đổi: export async function handleTradeCommand -> export async function execute
+// Đổi: export async function handleTradeButton -> export async function handleButton
 
 const TRADE_TIMEOUT_SECONDS = 30;
 
@@ -72,7 +85,7 @@ function parseTwoTradeSides(raw: string): { left: ParsedSide; right: ParsedSide 
   };
 }
 
-export async function handleTradeCommand(message: Message): Promise<void> {
+export async function execute(message: Message): Promise<void> {
   const targetUser = message.mentions.users.first();
   if (!targetUser) {
     await message.reply(
