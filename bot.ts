@@ -27,7 +27,7 @@ client.on("messageCreate", async (message) => {
     return;
   }
 
-  if (lower === "!pray") {
+  if (lower === "!pray" || lower.startsWith("!pray ")) {
     await handlePrayCommand(message);
     return;
   }
