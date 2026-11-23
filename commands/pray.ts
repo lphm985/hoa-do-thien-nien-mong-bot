@@ -82,7 +82,7 @@ export async function handlePrayCommand(message: Message): Promise<void> {
     }
 
     // Tung tỉ lệ rơi vật phẩm cho người cầu nguyện
-    const droppedItem = rollPrayItemDrop();
+    const droppedItem = await rollPrayItemDrop();
     let dropText = "";
     if (droppedItem) {
       const granted = await grantItemToUser(
@@ -143,7 +143,7 @@ export async function handlePrayCommand(message: Message): Promise<void> {
   }
 
   // Tung tỉ lệ rơi vật phẩm cho người được cầu nguyện hộ (@ten)
-  const droppedItem = rollPrayItemDrop();
+  const droppedItem = await rollPrayItemDrop();
   let dropText = "";
   if (droppedItem) {
     const granted = await grantItemToUser(targetUser.id, droppedItem.code, 1);
