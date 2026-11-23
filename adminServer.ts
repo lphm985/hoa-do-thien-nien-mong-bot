@@ -39,7 +39,7 @@ export function startAdminAndHealthServer(): void {
       const reqUrl = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
 
       // 1. Giữ cổng healthcheck cho UptimeRobot / Render ở trang chủ "/"
-      if (req.method === "GET" && reqUrl.pathname === "/") {
+      if ((req.method === "GET"|| req.method === "HEAD") && reqUrl.pathname === "/") {
         res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
         res.end("Bot Hoa Do Thien Nien Mong dang hoat dong!");
         return;
