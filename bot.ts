@@ -1,4 +1,5 @@
 import "dotenv/config";
+import http from "node:http";
 import { Client, GatewayIntentBits } from "discord.js";
 import { handlePrayCommand } from "./commands/pray.js";
 import { handleCurseCommand } from "./commands/curse.js";
@@ -21,6 +22,11 @@ client.on("messageCreate", async (message) => {
 
   const lower = message.content.trim().toLowerCase();
 
+  if (lower === "!help") {
+    await handleHelpCommand(message);
+    return;
+  }
+
   if (lower === "!pray") {
     await handlePrayCommand(message);
     return;
@@ -32,8 +38,6 @@ client.on("messageCreate", async (message) => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
-
-import http from "node:http";
 
 // Giữ cổng HTTP để nền tảng hosting không tắt bot
 const port = process.env.PORT || 3000;
