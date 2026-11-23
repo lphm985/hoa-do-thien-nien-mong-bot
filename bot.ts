@@ -5,6 +5,7 @@ import { handlePrayCommand } from "./commands/pray.js";
 import { handleCurseCommand } from "./commands/curse.js";
 import { handleHelpCommand } from "./commands/help.js";
 import { handleStatsCommand } from "./commands/stats.js";
+import { handleBagCommand } from "./commands/bag.js";
 
 const client = new Client({
   intents: [
@@ -41,6 +42,11 @@ client.on("messageCreate", async (message) => {
   if (lower === "!stats" || lower.startsWith("!stats ")) {
     await handleStatsCommand(message);
   }
+  if (lower === "!bag" ) {
+  await handleBagCommand(message);
+  return;
+  }
+  
 });
 
 client.login(process.env.DISCORD_TOKEN);
