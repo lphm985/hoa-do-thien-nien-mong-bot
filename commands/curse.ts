@@ -1,5 +1,11 @@
 import type { Message } from "discord.js";
 import { COOLDOWN_SECONDS, randomInt, supabase } from "../supabase.js";
+export const commandInfo = {
+  name: "curse",
+  command: "!curse @user",
+  description: "Nguyền rủa người được tag và trừ điểm ngẫu nhiên.",
+};
+// Đổi: export async function handleCurseCommand -> export async function execute
 
 type PerformCurseResult = {
   allowed?: boolean;
@@ -17,7 +23,7 @@ const CURSE_LINES: string[] = [
   "U Minh vọng tiếng, <@{target}> hứng trọn lời nguyền từ <@{caster}>!",
 ];
 
-export async function handleCurseCommand(message: Message): Promise<void> {
+export async function execute(message: Message): Promise<void> {
   const targetUser = message.mentions.users.first();
   if (!targetUser) {
     await message.reply("Hãy tag người bạn muốn nguyền rủa, ví dụ: `!curse @ten`");
