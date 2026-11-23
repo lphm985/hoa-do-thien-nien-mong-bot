@@ -3,52 +3,74 @@ import { supabase } from "./supabase.js";
 export type ItemDefinition = {
   code: string;
   name: string;
-  rarity: "Thường" | "Hiếm" | "Sử Thi";
-  dropRate: number; // Tỉ lệ rơi trực tiếp mỗi lần !pray (VD: 0.25 = 25%, 0.03 = 3%)
+  rarity: string;
+  dropRate: number;
   description: string;
 };
 
-// Danh sách vật phẩm & tỉ lệ rơi riêng từng món (tổng dropRate <= 1)
-export const ITEMS: ItemDefinition[] = [
-  {
-    code: "seed1",
-    name: "Xích Diệm hạt",
-    rarity: "Thường",
-    dropRate: 0.2, // 20%
-    description: "Hạt giống mang tính hoả, có lẽ sẽ có công dụng nào đó...",
-  },
-  {
-    code: "seed10",
-    name: "Thanh Ngọc hạt",
-    rarity: "Hiếm",
-    dropRate: 0.1, // 10%
-    description: "Hạt giống mang linh khí, biểu trưng của sự hài hòa.",
-  },
-  {
-    code: "seed2",
-    name: "Thạch Điệp hạt",
-    rarity: "Thường",
-    dropRate: 0.2, // 20%
-    description: "Kết tinh của đất, có lẽ sẽ có công dụng nào đó...",
-  },
-];
+type DiscordItemRow = {
+  code: string;
+  name: string;
+  rarity: string;
+  drop_rate: number;
+  description: string;
+  is_active: boolean;
+};
 
-export function getItemByCode(code: string): ItemDefinition | undefined {
-  return ITEMS.find((item) => item.code === code);
+const CACHE_TTL_MS = 30_000; // Làm mới danh sách vật phẩm sau mỗi 30 giây
+let cachedItems: ItemDefinition[] = [];
+let lastFetchedAt = 0;
+
+export async function getActiveItems(forceRefresh = false): Promise<ItemDefinition[]> {
+  const now = Date.now();
+  if (!forceRefresh && cachedItems.length > 0 && now - lastFetchedAt < CACHE_TTL_MS) {
+    return cachedItems;
+  }
+
+  const { data, error } = await supabase
+    .from("discord_items")
+    .select("code, name, rarity, drop_rate, description, is_active")
+    .eq("is_active", true);
+
+  if (error) {
+    console.error("Lỗi tải danh sách vật phẩm từ Supabase:", error);
+    return cachedItems;
+  }
+
+  const rows = (data ?? []) as DiscordItemRow[];
+  cachedItems = rows.map((row) => ({
+    code: row.code,
+    name: row.name,
+    rarity: row.rarity,
+    dropRate: Number(row.drop_rate ?? 0),
+    description: row.description ?? "",
+  }));
+  lastFetchedAt = now;
+
+  return cachedItems;
 }
 
-export function rollPrayItemDrop(): ItemDefinition | null {
-  const roll = Math.random(); // Số ngẫu nhiên từ 0 đến < 1
+export async function getItemByCode(code: string): Promise<ItemDefinition | undefined> {
+  const items = await getActiveItems();
+  return items.find((item) => item.code === code);
+}
+
+export async function rollPrayItemDrop(): Promise<ItemDefinition | null> {
+  const items = await getActiveItems();
+  if (items.length === 0) return null;
+
+  const roll = Math.random();
   let cumulative = 0;
 
-  for (const item of ITEMS) {
+  for (const item of items) {
+    if (item.dropRate <= 0) continue;
     cumulative += item.dropRate;
     if (roll < cumulative) {
       return item;
     }
   }
 
-  return null; // Rơi vào khoảng còn lại (không rớt vật phẩm)
+  return null;
 }
 
 export async function grantItemToUser(
