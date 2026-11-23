@@ -24,6 +24,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     command: "!stats [@user]",
     description: "Xem bảng thông tin, ảnh đại diện và tổng điểm của bản thân hoặc người khác.",
   },
+  { command: "!bag [@user]", description: "Mở bảng kho đồ vật phẩm của bản thân.", },
   
   // Sau này có lệnh mới thì thêm tiếp vào đây, ví dụ:
   // {
