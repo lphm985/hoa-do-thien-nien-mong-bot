@@ -25,6 +25,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     description: "Xem bảng thông tin, ảnh đại diện và tổng điểm của bản thân hoặc người khác.",
   },
   { command: "!bag [@user]", description: "Mở bảng kho đồ vật phẩm của bản thân.", },
+    {
+    command: "!give @user <item> [sl]",
+    description: "Tặng vật phẩm từ kho của bạn cho người khác.",
+  },
+  {
+    command: "!trade @user <món_bạn> [sl1] <món_họ> [sl2]",
+    description: "Đề nghị trao đổi 2 chiều (cần người được tag bấm Đồng ý).",
+  },
   
   // Sau này có lệnh mới thì thêm tiếp vào đây, ví dụ:
   // {
