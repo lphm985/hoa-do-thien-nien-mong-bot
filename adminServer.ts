@@ -110,6 +110,8 @@ export function startAdminAndHealthServer(): void {
       if (req.method === "GET" && reqUrl.pathname === "/admin") {
         const pw = reqUrl.searchParams.get("pw") ?? "";
         const saved = reqUrl.searchParams.get("saved") === "1";
+        const name = (form.get("name") ?? "").normalize("NFC").trim().replace(/\s+/g, " ");
+
 
         if (!checkPassword(pw)) {
           res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
