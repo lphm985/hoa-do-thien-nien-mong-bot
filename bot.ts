@@ -4,6 +4,7 @@ import { Client, GatewayIntentBits } from "discord.js";
 import { handlePrayCommand } from "./commands/pray.js";
 import { handleCurseCommand } from "./commands/curse.js";
 import { handleHelpCommand } from "./commands/help.js";
+import { handleStatsCommand } from "./commands/stats.js";
 
 const client = new Client({
   intents: [
@@ -34,6 +35,11 @@ client.on("messageCreate", async (message) => {
 
   if (lower.startsWith("!curse")) {
     await handleCurseCommand(message);
+    return;
+  }
+
+  if (lower === "!stats" || lower.startsWith("!stats ")) {
+    await handleStatsCommand(message);
   }
 });
 
