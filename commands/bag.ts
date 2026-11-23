@@ -1,6 +1,13 @@
 import { EmbedBuilder, type Message } from "discord.js";
 import { getItemByCode } from "../items.js";
 import { supabase } from "../supabase.js";
+export const commandInfo = {
+  name: "bag",
+  aliases: ["inv"],
+  command: "!bag [@user]",
+  description: "Mở bảng kho đồ vật phẩm của bản thân hoặc người khác.",
+};
+// Đổi: export async function handleBagCommand -> export async function execute
 
 type UserItemRow = {
   item_code: string;
