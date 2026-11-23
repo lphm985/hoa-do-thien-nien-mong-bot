@@ -54,6 +54,18 @@ export async function getItemByCode(code: string): Promise<ItemDefinition | unde
   const items = await getActiveItems();
   return items.find((item) => item.code === code);
 }
+export async function findItemByCodeOrName(
+  query: string
+): Promise<ItemDefinition | undefined> {
+  const cleaned = query.trim().toLowerCase();
+  if (!cleaned) return undefined;
+
+  const items = await getActiveItems();
+  return (
+    items.find((item) => item.code.toLowerCase() === cleaned) ??
+    items.find((item) => item.name.toLowerCase() === cleaned)
+  );
+}
 
 export async function rollPrayItemDrop(): Promise<ItemDefinition | null> {
   const items = await getActiveItems();
