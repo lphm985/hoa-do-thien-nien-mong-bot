@@ -65,11 +65,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton()) return;
   if (
     interaction.customId.startsWith("trade_accept:") ||
-    interaction.customId.startsWith("trade_decline:")
+    interaction.customId.startsWith("trade_decline:") ||
+    interaction.customId.startsWith("trade_cancel:")
   ) {
     await handleTradeButton(interaction);
   }
 });
+
 
 client.login(process.env.DISCORD_TOKEN);
 startAdminAndHealthServer();
