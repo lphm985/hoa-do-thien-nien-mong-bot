@@ -1,6 +1,12 @@
 import type { Message } from "discord.js";
 import { findItemByCodeOrName } from "../items.js";
 import { supabase } from "../supabase.js";
+export const commandInfo = {
+  name: "give",
+  command: "!give @user <item> [sl]",
+  description: "Tặng vật phẩm từ kho của bạn cho người khác.",
+};
+// Đổi: export async function handleGiveCommand -> export async function execute
 
 type TransferResult = {
   ok?: boolean;
@@ -10,7 +16,7 @@ type TransferResult = {
   receiver_qty?: number;
 };
 
-export async function handleGiveCommand(message: Message): Promise<void> {
+export async function execute(message: Message): Promise<void> {
   const targetUser = message.mentions.users.first();
   if (!targetUser) {
     await message.reply(
