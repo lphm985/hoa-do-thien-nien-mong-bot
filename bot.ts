@@ -1,11 +1,11 @@
 import "dotenv/config";
-import http from "node:http";
 import { Client, GatewayIntentBits } from "discord.js";
 import { handlePrayCommand } from "./commands/pray.js";
 import { handleCurseCommand } from "./commands/curse.js";
 import { handleHelpCommand } from "./commands/help.js";
 import { handleStatsCommand } from "./commands/stats.js";
 import { handleBagCommand } from "./commands/bag.js";
+import { startAdminAndHealthServer } from "./adminServer.js";
 
 const client = new Client({
   intents: [
@@ -41,23 +41,13 @@ client.on("messageCreate", async (message) => {
 
   if (lower === "!stats" || lower.startsWith("!stats ")) {
     await handleStatsCommand(message);
+    return;
   }
-  if (lower === "!bag" ) {
-  await handleBagCommand(message);
-  return;
+
+  if (lower === "!bag" || lower.startsWith("!bag ")) {
+    await handleBagCommand(message);
   }
-  
 });
 
 client.login(process.env.DISCORD_TOKEN);
-
-// Giữ cổng HTTP để nền tảng hosting không tắt bot
-const port = process.env.PORT || 3000;
-http
-  .createServer((_req, res) => {
-    res.writeHead(200, { "Content-Type": "text/plain" });
-    res.end("Bot Hoa Do Thien Nien Mong dang hoat dong!");
-  })
-  .listen(port, () => {
-    console.log(`Healthcheck server chạy tại cổng ${port}`);
-  });
+startAdminAndHealthServer();
