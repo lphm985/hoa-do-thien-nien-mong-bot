@@ -54,16 +54,37 @@ export async function getItemByCode(code: string): Promise<ItemDefinition | unde
   const items = await getActiveItems();
   return items.find((item) => item.code === code);
 }
+export async function normalizeText(str: string): string {
+  return str
+    .normalize("NFC")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function removeAccents(str: string): string {
+  return normalizeText(str)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d");
+}
+
 export async function findItemByCodeOrName(
   query: string
 ): Promise<ItemDefinition | undefined> {
-  const cleaned = query.trim().toLowerCase();
+  const cleaned = normalizeText(query);
   if (!cleaned) return undefined;
 
+  const noAccentQuery = removeAccents(query);
   const items = await getActiveItems();
+
   return (
-    items.find((item) => item.code.toLowerCase() === cleaned) ??
-    items.find((item) => item.name.toLowerCase() === cleaned)
+    // 1. Khớp chính xác mã (code)
+    items.find((item) => normalizeText(item.code) === cleaned) ??
+    // 2. Khớp chính xác tên (đã cắt khoảng trắng thừa 2 đầu)
+    items.find((item) => normalizeText(item.name) === cleaned) ??
+    // 3. Khớp tên không dấu (phòng trường hợp gõ thiếu/sai kiểu dấu trên điện thoại)
+    items.find((item) => removeAccents(item.name) === noAccentQuery)
   );
 }
 
