@@ -2,7 +2,7 @@ import "dotenv/config";
 import { Client, GatewayIntentBits } from "discord.js";
 import { handlePrayCommand } from "./commands/pray.js";
 import { handleCurseCommand } from "./commands/curse.js";
-import { handlehelpCommand } from "./commands/help.js";
+import { handleHelpCommand } from "./commands/help.js";
 
 const client = new Client({
   intents: [
