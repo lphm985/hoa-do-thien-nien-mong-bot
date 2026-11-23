@@ -1,5 +1,6 @@
 import type { Message } from "discord.js";
 import { COOLDOWN_SECONDS, supabase } from "../supabase.js";
+import { grantItemToUser, rollPrayItemDrop } from "../items.js";
 
 type PrayOutcome = {
   text: string;
@@ -80,16 +81,32 @@ export async function handlePrayCommand(message: Message): Promise<void> {
       return;
     }
 
+    // Tung tỉ lệ rơi vật phẩm cho người cầu nguyện
+    const droppedItem = rollPrayItemDrop();
+    let dropText = "";
+    if (droppedItem) {
+      const granted = await grantItemToUser(
+        message.author.id,
+        droppedItem.code,
+        1
+      );
+      if (granted.ok) {
+        dropText = `\n🎁 Nhận được vật phẩm: **${droppedItem.name}** *(${droppedItem.rarity})* — Tổng trong kho: **${granted.newQuantity}**`;
+      }
+    }
+
     const sign = outcome.delta >= 0 ? `+${outcome.delta}` : `${outcome.delta}`;
     await message.reply(
-      `${outcome.text}\nĐiểm thay đổi: **${sign}** | Tổng điểm cầu nguyện: **${row.new_points}**`
+      `${outcome.text}\nĐiểm thay đổi: **${sign}** | Tổng điểm cầu nguyện: **${row.new_points}**${dropText}`
     );
     return;
   }
 
   // Trường hợp 2: Cầu nguyện cho người khác (!pray @ten)
   if (targetUser.id === message.author.id) {
-    await message.reply("Cầu nguyện cho chính mình thì chỉ cần gõ `!pray` thôi nhé!");
+    await message.reply(
+      "Cầu nguyện cho chính mình thì chỉ cần gõ `!pray` thôi nhé!"
+    );
     return;
   }
 
@@ -125,12 +142,22 @@ export async function handlePrayCommand(message: Message): Promise<void> {
     return;
   }
 
+  // Tung tỉ lệ rơi vật phẩm cho người được cầu nguyện hộ (@ten)
+  const droppedItem = rollPrayItemDrop();
+  let dropText = "";
+  if (droppedItem) {
+    const granted = await grantItemToUser(targetUser.id, droppedItem.code, 1);
+    if (granted.ok) {
+      dropText = `\n🎁 <@${targetUser.id}> nhận được vật phẩm: **${droppedItem.name}** *(${droppedItem.rarity})* — Tổng trong kho: **${granted.newQuantity}**`;
+    }
+  }
+
   const line = outcome.text
     .replaceAll("{caster}", message.author.id)
     .replaceAll("{target}", targetUser.id);
   const sign = outcome.delta >= 0 ? `+${outcome.delta}` : `${outcome.delta}`;
 
   await message.reply(
-    `${line}\n<@${targetUser.id}> được thay đổi: **${sign}** điểm | Tổng điểm của <@${targetUser.id}>: **${row.target_points}**`
+    `${line}\n<@${targetUser.id}> được thay đổi: **${sign}** điểm | Tổng điểm của <@${targetUser.id}>: **${row.target_points}**${dropText}`
   );
 }
