@@ -11,25 +11,25 @@ export type ItemDefinition = {
 // Danh sách vật phẩm & tỉ lệ rơi riêng từng món (tổng dropRate <= 1)
 export const ITEMS: ItemDefinition[] = [
   {
-    code: "linh_huong",
-    name: "Linh Hương Trầm",
+    code: "seed1",
+    name: "Xích Diệm hạt",
     rarity: "Thường",
-    dropRate: 0.25, // 25%
-    description: "Nén hương thanh tịnh dùng để dâng tế Hoạ Đồ.",
+    dropRate: 0.2, // 20%
+    description: "Hạt giống mang tính hoả, có lẽ sẽ có công dụng nào đó...",
   },
   {
-    code: "ngoc_boi_van_khi",
-    name: "Ngọc Bội Vận Khí",
+    code: "seed10",
+    name: "Thanh Ngọc hạt",
     rarity: "Hiếm",
     dropRate: 0.1, // 10%
-    description: "Mảnh ngọc mang linh khí, biểu trưng của người gặp may.",
+    description: "Hạt giống mang linh khí, biểu trưng của sự hài hòa.",
   },
   {
-    code: "hoa_do_tinh_phach",
-    name: "Hoạ Đồ Tinh Phách",
-    rarity: "Sử Thi",
-    dropRate: 0.03, // 3%
-    description: "Kết tinh hiếm có ngưng tụ từ cổ hoạ thiên niên.",
+    code: "seed2",
+    name: "Thạch Điệp hạt",
+    rarity: "Thường",
+    dropRate: 0.2, // 20%
+    description: "Kết tinh của đất, có lẽ sẽ có công dụng nào đó...",
   },
 ];
 
