@@ -14,7 +14,7 @@ type UserItemRow = {
   quantity: number;
 };
 
-export async function handleBagCommand(message: Message): Promise<void> {
+export async function execute(message: Message): Promise<void> {
   // Lấy người được tag nếu có, không có thì lấy chính người gửi lệnh
   const targetUser = message.mentions.users.first() ?? message.author;
   const member = message.guild?.members.cache.get(targetUser.id);
