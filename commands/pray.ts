@@ -72,9 +72,11 @@ export async function handlePrayCommand(message: Message): Promise<void> {
     }
 
     const row = data as PerformPrayResult | null;
-    if (!row || !row.allowed) {
-      return;
-    }
+    if (!row || !row.allowed) { 
+	const waitSec = row?.remaining_seconds ?? COOLDOWN_SECONDS;
+	await message.reply(
+        `Bạn đang trong thời gian hồi chiêu, hãy đợi thêm **${waitSec}s** rồi mới \`!pray\` tiếp.`
+      );}
 
     const sign = outcome.delta >= 0 ? `+${outcome.delta}` : `${outcome.delta}`;
     await message.reply(
@@ -113,9 +115,11 @@ export async function handlePrayCommand(message: Message): Promise<void> {
   }
 
   const row = data as PerformPrayTargetResult | null;
-  if (!row || !row.allowed) {
-    return;
-  }
+  if (!row || !row.allowed) { 
+	const waitSec = row?.remaining_seconds ?? COOLDOWN_SECONDS;
+	await message.reply(
+        `Bạn đang trong thời gian hồi chiêu, hãy đợi thêm **${waitSec}s** rồi mới \`!pray\` tiếp.`
+      );}
 
   const line = outcome.text
     .replaceAll("{caster}", message.author.id)
