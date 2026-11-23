@@ -1,12 +1,18 @@
 import { EmbedBuilder, type Message } from "discord.js";
 import { supabase } from "../supabase.js";
+export const commandInfo = {
+  name: "stats",
+  command: "!stats [@user]",
+  description: "Xem bảng thông tin, ảnh đại diện và tổng điểm của bản thân hoặc người khác.",
+};
+// Đổi: export async function handleStatsCommand -> export async function execute
 
 type PrayStatsRow = {
   discord_id: string;
   pray_points: number;
 };
 
-export async function handleStatsCommand(message: Message): Promise<void> {
+export async function execute(message: Message): Promise<void> {
   const targetUser = message.mentions.users.first() ?? message.author;
   const member = message.guild?.members.cache.get(targetUser.id);
 
