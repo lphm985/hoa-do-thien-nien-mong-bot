@@ -2,6 +2,7 @@ import http from "node:http";
 import { URLSearchParams } from "node:url";
 import { supabase } from "./supabase.js";
 import { getActiveItems } from "./items.js";
+import { getShopSnapshot } from "./shopPricing.js";
 
 function escapeHtml(text: string): string {
   return text
@@ -51,7 +52,7 @@ function renderLoginPage(): string {
     "<body>",
     '  <form class="card" method="GET" action="/admin">',
     '    <h2 style="margin:0 0 8px">Hoạ Đồ — Quản Trị</h2>',
-    '    <p style="margin:0;color:#94a3b8;font-size:14px">Nhập mật khẩu ADMIN_PASSWORD để quản lý vật phẩm &amp; ruộng.</p>',
+    '    <p style="margin:0;color:#94a3b8;font-size:14px">Nhập mật khẩu ADMIN_PASSWORD để quản lý.</p>',
     '    <input type="password" name="pw" placeholder="Mật khẩu quản trị" required />',
     '    <button type="submit">Mở trang quản lý</button>',
     "  </form>",
@@ -84,7 +85,7 @@ export function startAdminAndHealthServer(): void {
         return;
       }
 
-      // 2. Thêm mới hoặc Cập nhật vật phẩm
+      // 2. Lưu vật phẩm (Tab 1)
       if (req.method === "POST" && reqUrl.pathname === "/admin/save") {
         try {
           const form = await readFormBody(req);
@@ -156,7 +157,7 @@ export function startAdminAndHealthServer(): void {
         return;
       }
 
-      // 3. Thêm mới hoặc Cập nhật công thức trồng trọt
+      // 3. Lưu công thức trồng trọt (Tab 2)
       if (req.method === "POST" && reqUrl.pathname === "/admin/save-recipe") {
         try {
           const form = await readFormBody(req);
@@ -223,12 +224,133 @@ export function startAdminAndHealthServer(): void {
         return;
       }
 
-      // 4. Giao diện trang quản trị /admin (2 Tab + Nút Sửa từng dòng)
+      // 4. Lưu cấu hình biến động Shop (Tab 3)
+      if (req.method === "POST" && reqUrl.pathname === "/admin/save-shop-config") {
+        try {
+          const form = await readFormBody(req);
+          const password = form.get("password") ?? "";
+          if (!checkPassword(password)) {
+            res.writeHead(401, { "Content-Type": "text/html; charset=utf-8" });
+            res.end(
+              "<h3>Sai mật khẩu quản trị! <a href='/admin'>Quay lại</a></h3>"
+            );
+            return;
+          }
+
+          const cycleSeconds = Math.max(
+            10,
+            Number.parseInt(form.get("cycle_seconds") ?? "3600", 10) || 3600
+          );
+          const randomItemCount = Math.max(
+            0,
+            Number.parseInt(form.get("random_item_count") ?? "3", 10) || 0
+          );
+          const maxChangePercent = Math.max(
+            0,
+            Math.min(95, Number(form.get("max_change_percent") ?? "30") || 0)
+          );
+
+          const { error } = await supabase.from("discord_shop_config").upsert(
+            {
+              id: 1,
+              cycle_seconds: cycleSeconds,
+              random_item_count: randomItemCount,
+              max_change_percent: maxChangePercent,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "id" }
+          );
+
+          if (error) {
+            res.writeHead(500, { "Content-Type": "text/html; charset=utf-8" });
+            res.end(
+              `<h3>Lỗi lưu cấu hình shop: ${escapeHtml(error.message)}</h3>`
+            );
+            return;
+          }
+
+          res.writeHead(302, {
+            Location: `/admin?pw=${encodeURIComponent(password)}&tab=shop&saved=1`,
+          });
+          res.end();
+        } catch (err) {
+          console.error("Lỗi lưu shop config:", err);
+          res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+          res.end("Lỗi máy chủ khi lưu cấu hình shop.");
+        }
+        return;
+      }
+
+      // 5. Lưu giá gốc & bật/tắt bán trong Shop cho 1 vật phẩm (Tab 3)
+      if (req.method === "POST" && reqUrl.pathname === "/admin/save-base-price") {
+        try {
+          const form = await readFormBody(req);
+          const password = form.get("password") ?? "";
+          if (!checkPassword(password)) {
+            res.writeHead(401, { "Content-Type": "text/html; charset=utf-8" });
+            res.end(
+              "<h3>Sai mật khẩu quản trị! <a href='/admin'>Quay lại</a></h3>"
+            );
+            return;
+          }
+
+          const code = (form.get("item_code") ?? "").trim().toLowerCase();
+          const basePrice = Math.max(
+            0,
+            Number.parseInt(form.get("base_price") ?? "0", 10) || 0
+          );
+          const shopEnabled = form.get("shop_enabled") === "on";
+
+          if (!code) {
+            res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+            res.end(
+              "<h3>Thiếu mã vật phẩm. <a href='javascript:history.back()'>Quay lại</a></h3>"
+            );
+            return;
+          }
+
+          const { error } = await supabase
+            .from("discord_items")
+            .update({
+              base_price: basePrice,
+              shop_enabled: shopEnabled,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("code", code);
+
+          if (error) {
+            res.writeHead(500, { "Content-Type": "text/html; charset=utf-8" });
+            res.end(
+              `<h3>Lỗi lưu giá gốc: ${escapeHtml(error.message)}</h3>`
+            );
+            return;
+          }
+
+          await getActiveItems(true);
+
+          res.writeHead(302, {
+            Location: `/admin?pw=${encodeURIComponent(password)}&tab=shop&saved=1`,
+          });
+          res.end();
+        } catch (err) {
+          console.error("Lỗi lưu base price:", err);
+          res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+          res.end("Lỗi máy chủ khi lưu giá gốc.");
+        }
+        return;
+      }
+
+      // 6. Giao diện trang quản trị /admin (3 Tab)
       if (req.method === "GET" && reqUrl.pathname === "/admin") {
         const pw = reqUrl.searchParams.get("pw") ?? "";
         const saved = reqUrl.searchParams.get("saved") === "1";
+        const tabParam = reqUrl.searchParams.get("tab");
         const activeTab =
-          reqUrl.searchParams.get("tab") === "recipes" ? "recipes" : "items";
+          tabParam === "recipes"
+            ? "recipes"
+            : tabParam === "shop"
+              ? "shop"
+              : "items";
 
         if (!checkPassword(pw)) {
           res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
@@ -236,20 +358,29 @@ export function startAdminAndHealthServer(): void {
           return;
         }
 
-        const [{ data: itemsData }, { data: recipesData }] = await Promise.all([
-          supabase
-            .from("discord_items")
-            .select("code, name, rarity, drop_rate, description, is_active")
-            .order("drop_rate", { ascending: false }),
-          supabase
-            .from("discord_crop_recipes")
-            .select("seed_item_code, harvest_item_code, harvest_quantity, grow_seconds")
-            .order("grow_seconds", { ascending: true }),
-        ]);
+        const [{ data: itemsData }, { data: recipesData }, shopSnapshot] =
+          await Promise.all([
+            supabase
+              .from("discord_items")
+              .select(
+                "code, name, rarity, drop_rate, description, is_active, base_price, shop_enabled"
+              )
+              .order("drop_rate", { ascending: false }),
+            supabase
+              .from("discord_crop_recipes")
+              .select(
+                "seed_item_code, harvest_item_code, harvest_quantity, grow_seconds"
+              )
+              .order("grow_seconds", { ascending: true }),
+            getShopSnapshot(),
+          ]);
 
         const items = itemsData ?? [];
         const recipes = recipesData ?? [];
         const itemNameMap = new Map(items.map((i) => [i.code, i.name]));
+        const shopPricingMap = new Map(
+          shopSnapshot.items.map((s) => [s.code, s])
+        );
 
         const totalPercent = items
           .filter((i) => i.is_active)
@@ -318,16 +449,57 @@ export function startAdminAndHealthServer(): void {
           })
           .join("\n");
 
+        const shopPriceRowsHtml = items
+          .map((item) => {
+            const baseP = Math.max(0, Number(item.base_price ?? 0));
+            const enabled = item.shop_enabled !== false;
+            const defaultSell =
+              baseP > 0 ? Math.max(1, Math.floor(baseP * 0.8)) : 0;
+            const live = shopPricingMap.get(item.code);
+            const deltaText =
+              live && live.changePercent !== 0
+                ? live.changePercent > 0
+                  ? `+${live.changePercent}%`
+                  : `${live.changePercent}%`
+                : "0%";
+            const currentLabel = !enabled
+              ? "Đã tắt bán"
+              : live && live.buyPrice > 0
+                ? `Mua ${live.buyPrice} / Bán ${live.sellPrice} (${deltaText})`
+                : baseP > 0
+                  ? `Mua ${baseP} / Bán ${defaultSell}`
+                  : "Chưa đặt giá";
+
+            return [
+              "<tr>",
+              `  <td><strong>${escapeHtml(item.name)}</strong> <code>${escapeHtml(item.code)}</code></td>`,
+              `  <td><strong>${baseP}</strong></td>`,
+              `  <td>${defaultSell}</td>`,
+              `  <td>${enabled ? "Đang bật" : "Đã tắt"}</td>`,
+              `  <td style="color:#94a3b8;font-size:13px">${escapeHtml(currentLabel)}</td>`,
+              "  <td>",
+              '    <button type="button" class="btn-edit"',
+              `      data-code="${escapeHtml(item.code)}"`,
+              `      data-name="${escapeHtml(item.name)}"`,
+              `      data-base="${baseP}"`,
+              `      data-shop="${enabled ? "1" : "0"}"`,
+              '      onclick="editBasePrice(this)">Sửa giá</button>',
+              "  </td>",
+              "</tr>",
+            ].join("\n");
+          })
+          .join("\n");
+
         const totalPctLabel = totalPercent.toFixed(2).replace(/\.00$/, "");
         const pwAttr = escapeHtml(pw);
 
         const clientScript = [
           "<script>",
           "function switchTab(tab) {",
-          "  document.getElementById('panel-items').classList.toggle('active', tab === 'items');",
-          "  document.getElementById('panel-recipes').classList.toggle('active', tab === 'recipes');",
-          "  document.getElementById('btn-tab-items').classList.toggle('active', tab === 'items');",
-          "  document.getElementById('btn-tab-recipes').classList.toggle('active', tab === 'recipes');",
+          "  ['items', 'recipes', 'shop'].forEach(function(t) {",
+          "    document.getElementById('panel-' + t).classList.toggle('active', t === tab);",
+          "    document.getElementById('btn-tab-' + t).classList.toggle('active', t === tab);",
+          "  });",
           "}",
           "function editItem(btn) {",
           "  switchTab('items');",
@@ -362,6 +534,14 @@ export function startAdminAndHealthServer(): void {
           "  document.getElementById('recipe-form-title').textContent = 'Thêm hoặc Sửa công thức gieo trồng';",
           "  document.getElementById('recipe-submit-btn').textContent = 'Lưu công thức trồng';",
           "}",
+          "function editBasePrice(btn) {",
+          "  switchTab('shop');",
+          "  document.getElementById('p-code').value = btn.dataset.code || '';",
+          "  document.getElementById('p-base').value = btn.dataset.base || '0';",
+          "  document.getElementById('p-shop').checked = btn.dataset.shop === '1';",
+          "  document.getElementById('price-form-title').textContent = 'Đặt giá gốc cho: ' + (btn.dataset.name || btn.dataset.code);",
+          "  document.getElementById('price-form').scrollIntoView({ behavior: 'smooth' });",
+          "}",
           "</script>",
         ].join("\n");
 
@@ -371,12 +551,12 @@ export function startAdminAndHealthServer(): void {
           "<head>",
           '  <meta charset="utf-8" />',
           '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
-          "  <title>Quản Lý Vật Phẩm &amp; Trồng Trọt</title>",
+          "  <title>Quản Trị — Hoạ Đồ</title>",
           "  <style>",
           "    body { font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 16px; }",
-          "    .container { max-width: 920px; margin: 0 auto; }",
-          "    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }",
-          "    .tab-btn { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #334155; background: #1e293b; color: #cbd5e1; font-weight: 700; font-size: 15px; cursor: pointer; margin-top: 0; }",
+          "    .container { max-width: 940px; margin: 0 auto; }",
+          "    .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }",
+          "    .tab-btn { flex: 1; min-width: 120px; padding: 11px; border-radius: 10px; border: 1px solid #334155; background: #1e293b; color: #cbd5e1; font-weight: 700; font-size: 14px; cursor: pointer; margin-top: 0; }",
           "    .tab-btn.active { background: #f59e0b; color: #0f172a; border-color: #f59e0b; }",
           "    .tab-panel { display: none; }",
           "    .tab-panel.active { display: block; }",
@@ -397,102 +577,78 @@ export function startAdminAndHealthServer(): void {
           '  <div class="container">',
           '    <h2 style="margin:0 0 12px">Hoạ Đồ — Trang Quản Trị</h2>',
           saved
-            ? '    <div class="notice">Đã lưu dữ liệu và làm mới hệ thống thành công!</div>'
+            ? '    <div class="notice">Đã lưu dữ liệu và cập nhật hệ thống thành công!</div>'
             : "",
           '    <div class="tabs">',
           `      <button type="button" id="btn-tab-items" class="tab-btn ${activeTab === "items" ? "active" : ""}" onclick="switchTab('items')">1. Vật phẩm (${items.length})</button>`,
           `      <button type="button" id="btn-tab-recipes" class="tab-btn ${activeTab === "recipes" ? "active" : ""}" onclick="switchTab('recipes')">2. Công thức trồng (${recipes.length})</button>`,
+          `      <button type="button" id="btn-tab-shop" class="tab-btn ${activeTab === "shop" ? "active" : ""}" onclick="switchTab('shop')">3. Shop &amp; Biến động</button>`,
           "    </div>",
           `    <div id="panel-items" class="tab-panel ${activeTab === "items" ? "active" : ""}">`,
           '      <form id="item-form" class="card" method="POST" action="/admin/save">',
           '        <h3 id="item-form-title" style="margin-top:0">Thêm mới hoặc Cập nhật vật phẩm</h3>',
           `        <input type="hidden" name="password" value="${pwAttr}" />`,
           '        <div class="grid">',
-          "          <div>",
-          "            <label>Mã vật phẩm (code)</label>",
-          '            <input type="text" id="f-code" name="code" placeholder="vd: thanh_thuy_hat" required />',
-          "          </div>",
-          "          <div>",
-          "            <label>Tên hiển thị</label>",
-          '            <input type="text" id="f-name" name="name" placeholder="vd: Thanh Thủy hạt" required />',
-          "          </div>",
-          "          <div>",
-          "            <label>Độ hiếm</label>",
-          '            <select id="f-rarity" name="rarity">',
-          '              <option value="Thường">Thường</option>',
-          '              <option value="Hiếm">Hiếm</option>',
-          '              <option value="Sử Thi">Sử Thi</option>',
-          '              <option value="Truyền Thuyết">Truyền Thuyết</option>',
-          "            </select>",
-          "          </div>",
-          "          <div>",
-          "            <label>Tỉ lệ rơi (%)</label>",
-          '            <input type="number" id="f-pct" name="drop_percent" step="0.01" min="0" max="100" placeholder="vd: 25 (0 nếu là nông sản)" required />',
-          "          </div>",
+          "          <div><label>Mã vật phẩm (code)</label><input type=\"text\" id=\"f-code\" name=\"code\" required /></div>",
+          "          <div><label>Tên hiển thị</label><input type=\"text\" id=\"f-name\" name=\"name\" required /></div>",
+          "          <div><label>Độ hiếm</label><select id=\"f-rarity\" name=\"rarity\"><option value=\"Thường\">Thường</option><option value=\"Hiếm\">Hiếm</option><option value=\"Sử Thi\">Sử Thi</option><option value=\"Truyền Thuyết\">Truyền Thuyết</option></select></div>",
+          "          <div><label>Tỉ lệ rơi (%)</label><input type=\"number\" id=\"f-pct\" name=\"drop_percent\" step=\"0.01\" min=\"0\" max=\"100\" required /></div>",
           "        </div>",
-          '        <div style="margin-top:12px">',
-          "          <label>Mô tả vật phẩm</label>",
-          '          <input type="text" id="f-desc" name="description" placeholder="Mô tả hiển thị trong !bag info" />',
-          "        </div>",
-          '        <div style="margin-top:12px">',
-          '          <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">',
-          '            <input type="checkbox" id="f-active" name="is_active" checked style="width:auto" />',
-          "            Đang kích hoạt (cho phép rơi khi !pray)",
-          "          </label>",
-          "        </div>",
+          '        <div style="margin-top:12px"><label>Mô tả vật phẩm</label><input type="text" id="f-desc" name="description" /></div>',
+          '        <div style="margin-top:12px"><label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="f-active" name="is_active" checked style="width:auto" /> Đang kích hoạt (cho phép rơi khi !pray)</label></div>',
           '        <button type="submit" id="item-submit-btn" class="btn-submit">Lưu vật phẩm</button>',
           '        <button type="button" class="btn-reset" onclick="resetItemForm()">Nhập mới</button>',
           "      </form>",
           '      <div class="card">',
           `        <h3 style="margin-top:0">Danh sách vật phẩm (Tổng tỉ lệ rơi: ${totalPctLabel}%)</h3>`,
-          '        <div style="overflow-x:auto">',
-          "          <table>",
-          "            <thead><tr><th>Mã</th><th>Tên</th><th>Độ hiếm</th><th>Tỉ lệ</th><th>Trạng thái</th><th>Mô tả</th><th>Thao tác</th></tr></thead>",
-          "            <tbody>",
+          '        <div style="overflow-x:auto"><table><thead><tr><th>Mã</th><th>Tên</th><th>Độ hiếm</th><th>Tỉ lệ</th><th>Trạng thái</th><th>Mô tả</th><th>Thao tác</th></tr></thead><tbody>',
           rowsHtml ||
             '<tr><td colspan="7" style="color:#94a3b8">Chưa có vật phẩm nào.</td></tr>',
-          "            </tbody>",
-          "          </table>",
-          "        </div>",
-          "      </div>",
+          "        </tbody></table></div></div>",
           "    </div>",
           `    <div id="panel-recipes" class="tab-panel ${activeTab === "recipes" ? "active" : ""}">`,
           '      <form id="recipe-form" class="card" method="POST" action="/admin/save-recipe">',
           '        <h3 id="recipe-form-title" style="margin-top:0">Thêm hoặc Sửa công thức gieo trồng</h3>',
           `        <input type="hidden" name="password" value="${pwAttr}" />`,
           '        <div class="grid">',
-          "          <div>",
-          "            <label>Hạt giống (Item 1)</label>",
-          `            <select id="r-seed" name="seed_item_code" required>${itemOptionsHtml}</select>`,
-          "          </div>",
-          "          <div>",
-          "            <label>Nông sản thu hoạch (Item 2)</label>",
-          `            <select id="r-harvest" name="harvest_item_code" required>${itemOptionsHtml}</select>`,
-          "          </div>",
-          "          <div>",
-          "            <label>Số lượng nông sản thu</label>",
-          '            <input type="number" id="r-qty" name="harvest_quantity" min="1" value="1" required />',
-          "          </div>",
-          "          <div>",
-          "            <label>Thời gian lớn (giây)</label>",
-          '            <input type="number" id="r-grow" name="grow_seconds" min="5" value="120" required />',
-          "          </div>",
+          `          <div><label>Hạt giống (Item 1)</label><select id="r-seed" name="seed_item_code" required>${itemOptionsHtml}</select></div>`,
+          `          <div><label>Nông sản thu hoạch (Item 2)</label><select id="r-harvest" name="harvest_item_code" required>${itemOptionsHtml}</select></div>`,
+          '          <div><label>Số lượng nông sản thu</label><input type="number" id="r-qty" name="harvest_quantity" min="1" value="1" required /></div>',
+          '          <div><label>Thời gian lớn (giây)</label><input type="number" id="r-grow" name="grow_seconds" min="5" value="120" required /></div>',
           "        </div>",
           '        <button type="submit" id="recipe-submit-btn" class="btn-submit" style="background:#10b981;color:#fff">Lưu công thức trồng</button>',
           '        <button type="button" class="btn-reset" onclick="resetRecipeForm()">Nhập mới</button>',
           "      </form>",
-          '      <div class="card">',
-          '        <h3 style="margin-top:0">Danh sách công thức gieo trồng</h3>',
-          '        <div style="overflow-x:auto">',
-          "          <table>",
-          "            <thead><tr><th>Hạt giống (Item 1)</th><th>Nông sản (Item 2)</th><th>Sản lượng</th><th>Thời gian lớn</th><th>Thao tác</th></tr></thead>",
-          "            <tbody>",
+          '      <div class="card"><h3 style="margin-top:0">Danh sách công thức gieo trồng</h3><div style="overflow-x:auto"><table><thead><tr><th>Hạt giống (Item 1)</th><th>Nông sản (Item 2)</th><th>Sản lượng</th><th>Thời gian lớn</th><th>Thao tác</th></tr></thead><tbody>',
           recipeRowsHtml ||
             '<tr><td colspan="5" style="color:#94a3b8">Chưa có công thức gieo trồng nào.</td></tr>',
-          "            </tbody>",
-          "          </table>",
+          "      </tbody></table></div></div>",
+          "    </div>",
+          `    <div id="panel-shop" class="tab-panel ${activeTab === "shop" ? "active" : ""}">`,
+          '      <form class="card" method="POST" action="/admin/save-shop-config">',
+          '        <h3 style="margin-top:0">Cấu hình chu kỳ biến động giá</h3>',
+          `        <input type="hidden" name="password" value="${pwAttr}" />`,
+          '        <div class="grid">',
+          `          <div><label>Chu kỳ đổi giá (giây)</label><input type="number" name="cycle_seconds" min="10" value="${shopSnapshot.config.cycleSeconds}" required /></div>`,
+          `          <div><label>Số lượng item ngẫu nhiên biến động</label><input type="number" name="random_item_count" min="0" value="${shopSnapshot.config.randomItemCount}" required /></div>`,
+          `          <div><label>Khoảng tăng/giảm lớn nhất (%)</label><input type="number" name="max_change_percent" step="1" min="0" max="95" value="${shopSnapshot.config.maxChangePercent}" required /></div>`,
           "        </div>",
-          "      </div>",
+          '        <button type="submit" class="btn-submit" style="background:#10b981;color:#fff">Lưu cấu hình biến động</button>',
+          "      </form>",
+          '      <form id="price-form" class="card" method="POST" action="/admin/save-base-price">',
+          '        <h3 id="price-form-title" style="margin-top:0">Thiết lập giá gốc &amp; trạng thái bán trong Shop</h3>',
+          `        <input type="hidden" name="password" value="${pwAttr}" />`,
+          '        <div class="grid">',
+          `          <div><label>Chọn vật phẩm</label><select id="p-code" name="item_code" required>${itemOptionsHtml}</select></div>`,
+          '          <div><label>Giá gốc (điểm — bán = 80%)</label><input type="number" id="p-base" name="base_price" min="0" value="0" required /></div>`,
+          "        </div>",
+          '        <div style="margin-top:12px"><label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="p-shop" name="shop_enabled" checked style="width:auto" /> Cho phép mua/bán vật phẩm này trong Shop</label></div>',
+          '        <button type="submit" class="btn-submit">Lưu thiết lập Shop</button>',
+          "      </form>",
+          '      <div class="card"><h3 style="margin-top:0">Bảng giá gốc &amp; trạng thái bán</h3><div style="overflow-x:auto"><table><thead><tr><th>Vật phẩm</th><th>Giá gốc</th><th>Bán chuẩn (80%)</th><th>Trạng thái</th><th>Giá chu kỳ hiện tại</th><th>Thao tác</th></tr></thead><tbody>',
+          shopPriceRowsHtml ||
+            '<tr><td colspan="6" style="color:#94a3b8">Chưa có vật phẩm nào.</td></tr>',
+          "      </tbody></table></div></div>",
           "    </div>",
           "  </div>",
           clientScript,
