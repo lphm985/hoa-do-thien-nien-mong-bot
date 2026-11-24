@@ -11,8 +11,11 @@ export type ShopItemPricing = {
   code: string;
   name: string;
   rarity: string;
-  basePrice: number;
-  changePercent: number; // 0 nếu không nằm trong danh sách biến động chu kỳ này
+  baseBuyPrice: number;
+  baseSellPrice: number;
+  canBuy: boolean;
+  canSell: boolean;
+  changePercent: number;
   buyPrice: number;
   sellPrice: number;
 };
@@ -37,25 +40,14 @@ function seededRandomInt(seedStr: string, min: number, max: number): number {
   return min + (num % (max - min + 1));
 }
 
-export function computePricesForItem(
-  basePrice: number,
-  changePercent: number
-): { buyPrice: number; sellPrice: number } {
-  const safeBase = Math.max(0, Math.floor(basePrice));
-  if (safeBase <= 0) {
-    return { buyPrice: 0, sellPrice: 0 };
-  }
-  const adjustedBuy = Math.max(
-    1,
-    Math.round(safeBase * (1 + changePercent / 100))
-  );
-  // Giá bán cố định = 80% giá mua
-  const sellPrice = Math.max(1, Math.floor(adjustedBuy * 0.8));
-  return { buyPrice: adjustedBuy, sellPrice };
+function applyDelta(baseValue: number, changePercent: number): number {
+  const safeBase = Math.max(0, Math.floor(baseValue));
+  if (safeBase <= 0) return 0;
+  return Math.max(1, Math.round(safeBase * (1 + changePercent / 100)));
 }
 
 export async function getShopSnapshot(): Promise<ShopSnapshot> {
-    const [{ data: cfgRow }, { data: itemsRows }] = await Promise.all([
+  const [{ data: cfgRow }, { data: itemsRows }] = await Promise.all([
     supabase
       .from("discord_shop_config")
       .select("cycle_seconds, random_item_count, max_change_percent")
@@ -63,39 +55,55 @@ export async function getShopSnapshot(): Promise<ShopSnapshot> {
       .maybeSingle(),
     supabase
       .from("discord_items")
-      .select("code, name, rarity, base_price, is_active, shop_enabled")
+      .select(
+        "code, name, rarity, base_price, base_sell_price, shop_buy_enabled, shop_sell_enabled, is_active"
+      )
       .eq("is_active", true)
-      .eq("shop_enabled", true)
-      .gt("base_price", 0)
       .order("name", { ascending: true }),
   ]);
 
-
   const config: ShopConfig = {
-    cycleSeconds: Math.max(10, Number(cfgRow?.cycle_seconds ?? DEFAULT_CONFIG.cycleSeconds)),
+    cycleSeconds: Math.max(
+      10,
+      Number(cfgRow?.cycle_seconds ?? DEFAULT_CONFIG.cycleSeconds)
+    ),
     randomItemCount: Math.max(
       0,
       Number(cfgRow?.random_item_count ?? DEFAULT_CONFIG.randomItemCount)
     ),
     maxChangePercent: Math.max(
       0,
-      Math.min(95, Number(cfgRow?.max_change_percent ?? DEFAULT_CONFIG.maxChangePercent))
+      Math.min(
+        95,
+        Number(cfgRow?.max_change_percent ?? DEFAULT_CONFIG.maxChangePercent)
+      )
     ),
   };
 
   const nowSec = Math.floor(Date.now() / 1000);
   const cycleId = Math.floor(nowSec / config.cycleSeconds);
-  const secondsUntilNextCycle =
-    (cycleId + 1) * config.cycleSeconds - nowSec;
+  const secondsUntilNextCycle = (cycleId + 1) * config.cycleSeconds - nowSec;
 
-  const tradableItems = (itemsRows ?? []).map((row) => ({
-    code: String(row.code),
-    name: String(row.name),
-    rarity: String(row.rarity ?? "Thường"),
-    basePrice: Math.max(0, Number(row.base_price ?? 0)),
-  }));
+  const tradableItems = (itemsRows ?? [])
+    .map((row) => {
+      const baseBuyPrice = Math.max(0, Number(row.base_price ?? 0));
+      const baseSellPrice = Math.max(0, Number(row.base_sell_price ?? 0));
+      const canBuy = row.shop_buy_enabled !== false && baseBuyPrice > 0;
+      const canSell = row.shop_sell_enabled !== false && baseSellPrice > 0;
 
-  // Xáo trộn ổn định theo cycleId để chọn ngẫu nhiên randomItemCount món cho chu kỳ này
+      return {
+        code: String(row.code),
+        name: String(row.name),
+        rarity: String(row.rarity ?? "Thường"),
+        baseBuyPrice,
+        baseSellPrice,
+        canBuy,
+        canSell,
+      };
+    })
+    .filter((it) => it.canBuy || it.canSell);
+
+  // Chọn ngẫu nhiên randomItemCount món ổn định trong suốt cycleId hiện tại
   const shuffled = [...tradableItems].sort((a, b) => {
     const ka = crypto
       .createHash("sha256")
@@ -116,7 +124,6 @@ export async function getShopSnapshot(): Promise<ShopSnapshot> {
   const changeMap = new Map<string, number>();
 
   for (const code of pickedCodes) {
-    // Sinh % tăng/giảm khác 0 trong [-maxInt, +maxInt]
     let delta = seededRandomInt(`${cycleId}:delta:${code}`, -maxInt, maxInt);
     if (delta === 0) {
       delta = maxInt;
@@ -126,15 +133,21 @@ export async function getShopSnapshot(): Promise<ShopSnapshot> {
 
   const items: ShopItemPricing[] = tradableItems.map((it) => {
     const changePercent = changeMap.get(it.code) ?? 0;
-    const { buyPrice, sellPrice } = computePricesForItem(
-      it.basePrice,
-      changePercent
-    );
+    const buyPrice = it.canBuy
+      ? applyDelta(it.baseBuyPrice, changePercent)
+      : 0;
+    const sellPrice = it.canSell
+      ? applyDelta(it.baseSellPrice, changePercent)
+      : 0;
+
     return {
       code: it.code,
       name: it.name,
       rarity: it.rarity,
-      basePrice: it.basePrice,
+      baseBuyPrice: it.baseBuyPrice,
+      baseSellPrice: it.baseSellPrice,
+      canBuy: it.canBuy,
+      canSell: it.canSell,
       changePercent,
       buyPrice,
       sellPrice,
@@ -147,4 +160,4 @@ export async function getShopSnapshot(): Promise<ShopSnapshot> {
     secondsUntilNextCycle,
     items,
   };
-      }
+}
