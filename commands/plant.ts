@@ -8,10 +8,11 @@ export const commandInfo: CommandMeta = {
   aliases: ["farm"],
   command: "!plant [stt | unlock | info <stt>]",
   description:
-    "Xem bảng ruộng (✅/❌), kiểm tra chi tiết từng ô, mở khóa ruộng bằng điểm hoặc gieo hạt giống (vd: !plant 1-3,5 thanh thuy hat).",
+    "Xem lưới ruộng (✅/❌/🔒), kiểm tra chi tiết từng ô, mở khóa ruộng bằng điểm hoặc gieo hạt giống.",
 };
 
-const MAX_PLOTS = 10;
+const MAX_PLOTS = 20;
+const ICONS_PER_ROW = 10;
 
 type PlotRow = {
   plot_index: number;
@@ -54,7 +55,13 @@ function parsePlotIndices(spec: string): number[] | null {
       if (bounds.length !== 2 || !bounds[0] || !bounds[1]) return null;
       const start = Number.parseInt(bounds[0], 10);
       const end = Number.parseInt(bounds[1], 10);
-      if (Number.isNaN(start) || Number.isNaN(end) || start < 1 || end < start || end > 50) {
+      if (
+        Number.isNaN(start) ||
+        Number.isNaN(end) ||
+        start < 1 ||
+        end < start ||
+        end > MAX_PLOTS
+      ) {
         return null;
       }
       for (let i = start; i <= end; i++) {
@@ -62,7 +69,7 @@ function parsePlotIndices(spec: string): number[] | null {
       }
     } else {
       const num = Number.parseInt(seg, 10);
-      if (Number.isNaN(num) || num < 1 || num > 50) return null;
+      if (Number.isNaN(num) || num < 1 || num > MAX_PLOTS) return null;
       result.add(num);
     }
   }
@@ -86,7 +93,10 @@ async function getUserFarmState(discordId: string): Promise<{
 }> {
   await supabase
     .from("discord_user_farms")
-    .upsert({ discord_id: discordId, unlocked_plots: 2 }, { onConflict: "discord_id", ignoreDuplicates: true });
+    .upsert(
+      { discord_id: discordId, unlocked_plots: 2 },
+      { onConflict: "discord_id", ignoreDuplicates: true }
+    );
 
   const [{ data: farmData }, { data: plotsData }] = await Promise.all([
     supabase
@@ -111,37 +121,32 @@ async function getUserFarmState(discordId: string): Promise<{
 }
 
 export async function execute(message: Message): Promise<void> {
-  const rawArgs = message.content.trim().replace(/^!(plant|farm)\b/i, "").trim();
+  const rawArgs = message.content
+    .trim()
+    .replace(/^!(plant|farm)\b/i, "")
+    .trim();
 
-  // Trường hợp 1: Gõ !plant (không tham số) -> Hiện bảng trạng thái ruộng theo từng hàng
+  // 1. Gõ !plant -> Hiện lưới icon mỗi hàng đúng 10 ô, đủ 10 ô xuống hàng tiếp theo
   if (!rawArgs) {
-    const { unlockedPlots, plotsMap } = await getUserFarmState(message.author.id);
-    const now = Date.now();
+    const { unlockedPlots, plotsMap } = await getUserFarmState(
+      message.author.id
+    );
 
-    const rowsText: string[] = [];
-    for (let i = 1; i <= MAX_PLOTS; i++) {
-      if (i > unlockedPlots) {
-        const unlockCost = (i - 1) * 100;
-        rowsText.push(`🔒 **Ô #${i}** — Chưa mở khóa *(mở bằng \`!plant unlock\` tốn **${unlockCost}** điểm)*`);
-        continue;
+    const gridLines: string[] = [];
+    for (let rowStart = 1; rowStart <= MAX_PLOTS; rowStart += ICONS_PER_ROW) {
+      const rowEnd = Math.min(rowStart + ICONS_PER_ROW - 1, MAX_PLOTS);
+      const rowIcons: string[] = [];
+
+      for (let i = rowStart; i <= rowEnd; i++) {
+        if (i > unlockedPlots) {
+          rowIcons.push("🔒");
+        } else {
+          const plot = plotsMap.get(i);
+          rowIcons.push(plot && plot.seed_item_code ? "✅" : "❌");
+        }
       }
 
-      const plot = plotsMap.get(i);
-      if (!plot || !plot.seed_item_code) {
-        rowsText.push(`❌ **Ô #${i}** — Trống *(chưa trồng)*`);
-        continue;
-      }
-
-      const itemDef = await getItemByCode(plot.seed_item_code);
-      const cropName = itemDef?.name ?? plot.seed_item_code;
-      const readyMs = plot.ready_at ? new Date(plot.ready_at).getTime() : now;
-
-      if (now >= readyMs) {
-        rowsText.push(`✅ **Ô #${i}** — **${cropName}** • 🌟 **Đã chín!** *(gõ \`!harvest ${i}\`)*`);
-      } else {
-        const remainSec = (readyMs - now) / 1000;
-        rowsText.push(`✅ **Ô #${i}** — **${cropName}** • ⏳ Còn **${formatDuration(remainSec)}**`);
-      }
+      gridLines.push(`**#${rowStart}–#${rowEnd}:** ${rowIcons.join(" ")}`);
     }
 
     const nextCost = unlockedPlots < MAX_PLOTS ? unlockedPlots * 100 : null;
@@ -151,15 +156,20 @@ export async function execute(message: Message): Promise<void> {
 
     const embed = new EmbedBuilder()
       .setColor(0x22c55e)
-      .setTitle(`Linh Điền — ${message.member?.displayName ?? message.author.displayName}`)
+      .setTitle(
+        `Linh Điền — ${message.member?.displayName ?? message.author.displayName}`
+      )
       .setThumbnail(message.author.displayAvatarURL({ size: 256 }))
-      .setDescription(rowsText.join("\n"))
+      .setDescription(
+        `✅ Đã trồng &nbsp; • &nbsp; ❌ Chưa trồng &nbsp; • &nbsp; 🔒 Khóa\n\n` +
+          gridLines.join("\n")
+      )
       .addFields({
-        name: "Hướng dẫn nhanh",
+        name: "Thao tác nhanh",
         value:
-          "• Xem chi tiết 1 ô: `!plant info <stt>` (vd: `!plant info 1`)\n" +
+          "• Xem chi tiết 1 ô: `!plant info <stt>`\n" +
           "• Gieo hạt: `!plant <stt> <hạt_giống>` (vd: `!plant 1-3,5 thanh thuy hat`)\n" +
-          "• Thu hoạch: `!harvest` hoặc `!harvest 1-3`",
+          "• Thu hoạch: `!harvest` hoặc `!harvest 1-3,5`",
         inline: false,
       })
       .setFooter({ text: footerHint })
@@ -169,7 +179,7 @@ export async function execute(message: Message): Promise<void> {
     return;
   }
 
-  // Trường hợp 2: Mở khóa thêm mảnh ruộng (!plant unlock)
+  // 2. Mở khóa thêm mảnh ruộng (!plant unlock)
   if (rawArgs.toLowerCase() === "unlock") {
     const { data, error } = await supabase.rpc("unlock_farm_plot", {
       p_discord_id: message.author.id,
@@ -185,7 +195,9 @@ export async function execute(message: Message): Promise<void> {
     const res = data as UnlockResult | null;
     if (!res?.ok) {
       if (res?.reason === "max_reached") {
-        await message.reply(`Bạn đã mở khóa tối đa **${MAX_PLOTS}** mảnh ruộng rồi!`);
+        await message.reply(
+          `Bạn đã mở khóa tối đa **${MAX_PLOTS}** mảnh ruộng rồi!`
+        );
         return;
       }
       if (res?.reason === "not_enough_points") {
@@ -204,20 +216,24 @@ export async function execute(message: Message): Promise<void> {
     return;
   }
 
-  // Trường hợp 3: Kiểm tra chi tiết 1 ô ruộng (!plant info <stt> hoặc !plant <stt>)
+  // 3. Kiểm tra chi tiết 1 ô ruộng (!plant info <stt> hoặc !plant <stt>)
   const infoMatch = rawArgs.match(/^(?:info\s+)?(\d+)$/i);
   if (infoMatch) {
     const plotIndex = Number.parseInt(infoMatch[1], 10);
     if (plotIndex < 1 || plotIndex > MAX_PLOTS) {
-      await message.reply(`Số thứ tự ô ruộng chỉ nằm trong khoảng từ **1** đến **${MAX_PLOTS}**.`);
+      await message.reply(
+        `Số thứ tự ô ruộng chỉ nằm trong khoảng từ **1** đến **${MAX_PLOTS}**.`
+      );
       return;
     }
 
-    const { unlockedPlots, plotsMap } = await getUserFarmState(message.author.id);
+    const { unlockedPlots, plotsMap } = await getUserFarmState(
+      message.author.id
+    );
     if (plotIndex > unlockedPlots) {
       const unlockCost = (plotIndex - 1) * 100;
       await message.reply(
-        `🔒 **Ô ruộng #${plotIndex}** hiện **chưa mở khóa** (cần mở lần lượt từng ô; giá mở ô này là **${unlockCost}** điểm).`
+        `🔒 **Ô ruộng #${plotIndex}** hiện **chưa mở khóa** (giá mở ô này là **${unlockCost}** điểm).`
       );
       return;
     }
@@ -227,10 +243,10 @@ export async function execute(message: Message): Promise<void> {
       const emptyEmbed = new EmbedBuilder()
         .setColor(0xef4444)
         .setTitle(`Chi Tiết Ô Ruộng #${plotIndex}`)
-        .setDescription("❌ **Trạng thái:** Đất trống (chưa gieo hạt).")
+        .setDescription("❌ **Trạng thái:** Chưa trồng (đất trống).")
         .addFields({
           name: "Gợi ý gieo trồng",
-          value: `Gõ \`!plant ${plotIndex} <tên_hoặc_mã_hạt_giống>\` để bắt đầu trồng trên ô này.`,
+          value: `Gõ \`!plant ${plotIndex} <tên_hoặc_mã_hạt_giống>\` để gieo hạt lên ô này.`,
         });
       await message.reply({ embeds: [emptyEmbed] });
       return;
@@ -250,7 +266,9 @@ export async function execute(message: Message): Promise<void> {
       : undefined;
 
     const now = Date.now();
-    const plantedUnix = plot.planted_at ? Math.floor(new Date(plot.planted_at).getTime() / 1000) : null;
+    const plantedUnix = plot.planted_at
+      ? Math.floor(new Date(plot.planted_at).getTime() / 1000)
+      : null;
     const readyMs = plot.ready_at ? new Date(plot.ready_at).getTime() : now;
     const readyUnix = Math.floor(readyMs / 1000);
     const isReady = now >= readyMs;
@@ -260,8 +278,8 @@ export async function execute(message: Message): Promise<void> {
       .setTitle(`Chi Tiết Ô Ruộng #${plotIndex}`)
       .setDescription(
         isReady
-          ? "✅ **Trạng thái:** Đã chín — sẵn sàng thu hoạch!"
-          : `✅ **Trạng thái:** Đang sinh trưởng *(còn **${formatDuration((readyMs - now) / 1000)}**)*`
+          ? "✅ **Trạng thái:** Đã trồng • 🌟 **Đã chín** (sẵn sàng thu hoạch)"
+          : `✅ **Trạng thái:** Đã trồng • ⏳ Đang lớn *(còn **${formatDuration((readyMs - now) / 1000)}**)*`
       )
       .addFields(
         {
@@ -287,7 +305,7 @@ export async function execute(message: Message): Promise<void> {
     return;
   }
 
-  // Trường hợp 4: Trồng hạt giống lên 1 hoặc nhiều ô (!plant 1-3,5 thanh thuy hat)
+  // 4. Gieo hạt giống lên 1 hoặc nhiều ô (!plant 1-3,5 thanh thuy hat)
   const firstSpaceIdx = rawArgs.search(/\s+/);
   if (firstSpaceIdx === -1) {
     await message.reply(
@@ -302,14 +320,16 @@ export async function execute(message: Message): Promise<void> {
   const plotIndices = parsePlotIndices(plotSpec);
   if (!plotIndices || plotIndices.length === 0) {
     await message.reply(
-      `Định dạng số thứ tự ô ruộng không hợp lệ (\`${plotSpec}\`). Hãy nhập dạng \`1\`, \`1-4\` hoặc \`1,3,5\`.`
+      `Định dạng số thứ tự ô ruộng không hợp lệ (\`${plotSpec}\`). Hãy dùng dạng \`1\`, \`1-4\` hoặc \`1,3,5\`.`
     );
     return;
   }
 
   const seedDef = await findItemByCodeOrName(seedQuery);
   if (!seedDef) {
-    await message.reply(`Không tìm thấy vật phẩm hạt giống \`${seedQuery}\` trong hệ thống.`);
+    await message.reply(
+      `Không tìm thấy vật phẩm hạt giống \`${seedQuery}\` trong hệ thống.`
+    );
     return;
   }
 
@@ -358,4 +378,3 @@ export async function execute(message: Message): Promise<void> {
 
   await message.reply(lines.join("\n"));
 }
-  
