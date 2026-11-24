@@ -225,7 +225,10 @@ export function startAdminAndHealthServer(): void {
       }
 
       // 4. Lưu cấu hình biến động Shop (Tab 3)
-      if (req.method === "POST" && reqUrl.pathname === "/admin/save-shop-config") {
+      if (
+        req.method === "POST" &&
+        reqUrl.pathname === "/admin/save-shop-config"
+      ) {
         try {
           const form = await readFormBody(req);
           const password = form.get("password") ?? "";
@@ -282,7 +285,10 @@ export function startAdminAndHealthServer(): void {
       }
 
       // 5. Lưu giá gốc & bật/tắt bán trong Shop cho 1 vật phẩm (Tab 3)
-      if (req.method === "POST" && reqUrl.pathname === "/admin/save-base-price") {
+      if (
+        req.method === "POST" &&
+        reqUrl.pathname === "/admin/save-base-price"
+      ) {
         try {
           const form = await readFormBody(req);
           const password = form.get("password") ?? "";
@@ -589,13 +595,38 @@ export function startAdminAndHealthServer(): void {
           '        <h3 id="item-form-title" style="margin-top:0">Thêm mới hoặc Cập nhật vật phẩm</h3>',
           `        <input type="hidden" name="password" value="${pwAttr}" />`,
           '        <div class="grid">',
-          "          <div><label>Mã vật phẩm (code)</label><input type=\"text\" id=\"f-code\" name=\"code\" required /></div>",
-          "          <div><label>Tên hiển thị</label><input type=\"text\" id=\"f-name\" name=\"name\" required /></div>",
-          "          <div><label>Độ hiếm</label><select id=\"f-rarity\" name=\"rarity\"><option value=\"Thường\">Thường</option><option value=\"Hiếm\">Hiếm</option><option value=\"Sử Thi\">Sử Thi</option><option value=\"Truyền Thuyết\">Truyền Thuyết</option></select></div>",
-          "          <div><label>Tỉ lệ rơi (%)</label><input type=\"number\" id=\"f-pct\" name=\"drop_percent\" step=\"0.01\" min=\"0\" max=\"100\" required /></div>",
+          "          <div>",
+          "            <label>Mã vật phẩm (code)</label>",
+          '            <input type="text" id="f-code" name="code" required />',
+          "          </div>",
+          "          <div>",
+          "            <label>Tên hiển thị</label>",
+          '            <input type="text" id="f-name" name="name" required />',
+          "          </div>",
+          "          <div>",
+          "            <label>Độ hiếm</label>",
+          '            <select id="f-rarity" name="rarity">',
+          '              <option value="Thường">Thường</option>',
+          '              <option value="Hiếm">Hiếm</option>',
+          '              <option value="Sử Thi">Sử Thi</option>',
+          '              <option value="Truyền Thuyết">Truyền Thuyết</option>',
+          "            </select>",
+          "          </div>",
+          "          <div>",
+          "            <label>Tỉ lệ rơi (%)</label>",
+          '            <input type="number" id="f-pct" name="drop_percent" step="0.01" min="0" max="100" required />',
+          "          </div>",
           "        </div>",
-          '        <div style="margin-top:12px"><label>Mô tả vật phẩm</label><input type="text" id="f-desc" name="description" /></div>',
-          '        <div style="margin-top:12px"><label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="f-active" name="is_active" checked style="width:auto" /> Đang kích hoạt (cho phép rơi khi !pray)</label></div>',
+          '        <div style="margin-top:12px">',
+          "          <label>Mô tả vật phẩm</label>",
+          '          <input type="text" id="f-desc" name="description" />',
+          "        </div>",
+          '        <div style="margin-top:12px">',
+          '          <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">',
+          '            <input type="checkbox" id="f-active" name="is_active" checked style="width:auto" />',
+          "            Đang kích hoạt (cho phép rơi khi !pray)",
+          "          </label>",
+          "        </div>",
           '        <button type="submit" id="item-submit-btn" class="btn-submit">Lưu vật phẩm</button>',
           '        <button type="button" class="btn-reset" onclick="resetItemForm()">Nhập mới</button>',
           "      </form>",
@@ -640,7 +671,7 @@ export function startAdminAndHealthServer(): void {
           `        <input type="hidden" name="password" value="${pwAttr}" />`,
           '        <div class="grid">',
           `          <div><label>Chọn vật phẩm</label><select id="p-code" name="item_code" required>${itemOptionsHtml}</select></div>`,
-          '          <div><label>Giá gốc (điểm — bán = 80%)</label><input type="number" id="p-base" name="base_price" min="0" value="0" required /></div>`,
+          '          <div><label>Giá gốc (điểm — bán = 80%)</label><input type="number" id="p-base" name="base_price" min="0" value="0" required /></div>',
           "        </div>",
           '        <div style="margin-top:12px"><label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="p-shop" name="shop_enabled" checked style="width:auto" /> Cho phép mua/bán vật phẩm này trong Shop</label></div>',
           '        <button type="submit" class="btn-submit">Lưu thiết lập Shop</button>',
