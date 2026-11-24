@@ -178,43 +178,117 @@ export async function execute(message: Message): Promise<void> {
     await message.reply({ embeds: [embed] });
     return;
   }
+  // 2. Mở khóa mảnh ruộng (!plant unlock hoặc !plant unlock 3-5 hoặc !plant unlock 3,5)
+  const unlockMatch = rawArgs.match(/^unlock(?:\s+(.+))?$/i);
+  if (unlockMatch) {
+    const specArg = unlockMatch[1]?.trim();
 
-  // 2. Mở khóa thêm mảnh ruộng (!plant unlock)
-  if (rawArgs.toLowerCase() === "unlock") {
-    const { data, error } = await supabase.rpc("unlock_farm_plot", {
+    // Không ghi số ô -> mở 1 ô kế tiếp như cũ
+    if (!specArg) {
+      const { data, error } = await supabase.rpc("unlock_farm_plot", {
+        p_discord_id: message.author.id,
+        p_max_plots: MAX_PLOTS,
+      });
+
+      if (error) {
+        console.error("Lỗi mở khóa ruộng:", error);
+        await message.reply("Có lỗi khi mở khóa mảnh ruộng, thử lại sau nhé.");
+        return;
+      }
+
+      const res = data as UnlockResult | null;
+      if (!res?.ok) {
+        if (res?.reason === "max_reached") {
+          await message.reply(
+            `Bạn đã mở khóa tối đa **${MAX_PLOTS}** mảnh ruộng rồi!`
+          );
+          return;
+        }
+        if (res?.reason === "not_enough_points") {
+          await message.reply(
+            `Không đủ điểm để mở **Ô #${res.next_plot}** (cần **${res.cost}** điểm, bạn hiện có **${res.current_points}** điểm).`
+          );
+          return;
+        }
+        await message.reply("Không thể mở khóa mảnh ruộng lúc này.");
+        return;
+      }
+
+      await message.reply(
+        `🌱 Chúc mừng! Bạn đã dùng **${res.cost}** điểm cầu nguyện để mở khóa **Ô ruộng #${res.unlocked}**!\nĐiểm còn lại: **${res.remaining_points}**.`
+      );
+      return;
+    }
+
+    // Có nhập định dạng STT (vd: 3-5, 1,3,5, 1-3,6)
+    const targetIndices = parsePlotIndices(specArg);
+    if (!targetIndices || targetIndices.length === 0) {
+      await message.reply(
+        `Định dạng số thứ tự ô ruộng không hợp lệ (\`${specArg}\`). Hãy dùng dạng \`3-5\`, \`3,5\` hoặc \`1-3,5\`.`
+      );
+      return;
+    }
+
+    const { data, error } = await supabase.rpc("unlock_farm_plots_batch", {
       p_discord_id: message.author.id,
+      p_target_plots: targetIndices,
       p_max_plots: MAX_PLOTS,
     });
 
     if (error) {
-      console.error("Lỗi mở khóa ruộng:", error);
-      await message.reply("Có lỗi khi mở khóa mảnh ruộng, thử lại sau nhé.");
+      console.error("Lỗi mở khóa nhiều ô ruộng:", error);
+      await message.reply("Có lỗi khi mở khóa các mảnh ruộng, thử lại sau nhé.");
       return;
     }
 
-    const res = data as UnlockResult | null;
+    const res = data as {
+      ok?: boolean;
+      reason?: string;
+      unlocked_plots?: number[];
+      new_total_unlocked?: number;
+      total_cost?: number;
+      current_points?: number;
+      remaining_points?: number;
+      expected_next?: number;
+      max_plots?: number;
+    } | null;
+
     if (!res?.ok) {
-      if (res?.reason === "max_reached") {
+      if (res?.reason === "already_unlocked") {
         await message.reply(
-          `Bạn đã mở khóa tối đa **${MAX_PLOTS}** mảnh ruộng rồi!`
+          `Các ô bạn chọn đã được mở khóa từ trước (hiện đã mở **${res.unlocked}** ô).`
+        );
+        return;
+      }
+      if (res?.reason === "non_sequential") {
+        await message.reply(
+          `Bạn cần mở nối tiếp từ **Ô #${res.expected_next}** trở lên (không thể bỏ qua ô trống ở giữa).`
+        );
+        return;
+      }
+      if (res?.reason === "exceeds_max") {
+        await message.reply(
+          `Số thứ tự ô vượt quá giới hạn tối đa **${res.max_plots ?? MAX_PLOTS}** ô.`
         );
         return;
       }
       if (res?.reason === "not_enough_points") {
         await message.reply(
-          `Không đủ điểm để mở **Ô #${res.next_plot}** (cần **${res.cost}** điểm, bạn hiện có **${res.current_points}** điểm).`
+          `Không đủ điểm để mở **${(res.target_plots ?? []).map((n) => `#${n}`).join(", ")}** (tổng cần **${res.total_cost}** điểm, bạn hiện có **${res.current_points}** điểm).`
         );
         return;
       }
-      await message.reply("Không thể mở khóa mảnh ruộng lúc này.");
+      await message.reply("Không thể mở khóa các mảnh ruộng lúc này.");
       return;
     }
 
     await message.reply(
-      `🌱 Chúc mừng! Bạn đã dùng **${res.cost}** điểm cầu nguyện để mở khóa **Ô ruộng #${res.unlocked}**!\nĐiểm còn lại: **${res.remaining_points}**.`
+      `🌱 Chúc mừng! Đã mở khóa các ô **${(res.unlocked_plots ?? []).map((n) => `#${n}`).join(", ")}** (tổng đang mở: **${res.new_total_unlocked}/${MAX_PLOTS}** ô)!\n` +
+        `Đã dùng **${res.total_cost}** điểm cầu nguyện • Điểm còn lại: **${res.remaining_points}**.`
     );
     return;
   }
+  
 
   // 3. Kiểm tra chi tiết 1 ô ruộng (!plant info <stt> hoặc !plant <stt>)
   const infoMatch = rawArgs.match(/^(?:info\s+)?(\d+)$/i);
