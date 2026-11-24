@@ -146,7 +146,7 @@ export async function execute(message: Message): Promise<void> {
         }
       }
 
-      gridLines.push(`**#${rowStart}–#${rowEnd}:** ${rowIcons.join(" ")}`);
+      gridLines.push(`**#${rowStart}–#${rowEnd}:** ${rowIcons.join("")}`);
     }
 
     const nextCost = unlockedPlots < MAX_PLOTS ? unlockedPlots * 100 : null;
@@ -161,7 +161,7 @@ export async function execute(message: Message): Promise<void> {
       )
       .setThumbnail(message.author.displayAvatarURL({ size: 256 }))
       .setDescription(
-        `✅ Đã trồng &nbsp; • &nbsp; ❌ Chưa trồng &nbsp; • &nbsp; 🔒 Khóa\n\n` +
+        `✅ Đã trồng  |  ❌ Chưa trồng  |  🔒 Khóa\n\n` +
           gridLines.join("\n")
       )
       .addFields({
