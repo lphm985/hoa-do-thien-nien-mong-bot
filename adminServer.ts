@@ -284,7 +284,7 @@ export function startAdminAndHealthServer(): void {
         return;
       }
 
-      // 5. Lưu giá gốc & bật/tắt bán trong Shop cho 1 vật phẩm (Tab 3)
+      // 5. Lưu giá gốc mua/bán & công tắc bật/tắt mua/bán riêng biệt (Tab 3)
       if (
         req.method === "POST" &&
         reqUrl.pathname === "/admin/save-base-price"
@@ -301,11 +301,20 @@ export function startAdminAndHealthServer(): void {
           }
 
           const code = (form.get("item_code") ?? "").trim().toLowerCase();
-          const basePrice = Math.max(
+          const baseBuyPrice = Math.max(
             0,
-            Number.parseInt(form.get("base_price") ?? "0", 10) || 0
+            Number.parseInt(form.get("base_buy_price") ?? "0", 10) || 0
           );
-          const shopEnabled = form.get("shop_enabled") === "on";
+          const rawSell = form.get("base_sell_price");
+          const baseSellPrice =
+            rawSell !== null && rawSell.trim() !== ""
+              ? Math.max(0, Number.parseInt(rawSell, 10) || 0)
+              : baseBuyPrice > 0
+                ? Math.max(1, Math.floor(baseBuyPrice * 0.8))
+                : 0;
+
+          const shopBuyEnabled = form.get("shop_buy_enabled") === "on";
+          const shopSellEnabled = form.get("shop_sell_enabled") === "on";
 
           if (!code) {
             res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
@@ -318,8 +327,11 @@ export function startAdminAndHealthServer(): void {
           const { error } = await supabase
             .from("discord_items")
             .update({
-              base_price: basePrice,
-              shop_enabled: shopEnabled,
+              base_price: baseBuyPrice,
+              base_sell_price: baseSellPrice,
+              shop_buy_enabled: shopBuyEnabled,
+              shop_sell_enabled: shopSellEnabled,
+              shop_enabled: shopBuyEnabled || shopSellEnabled,
               updated_at: new Date().toISOString(),
             })
             .eq("code", code);
@@ -327,7 +339,7 @@ export function startAdminAndHealthServer(): void {
           if (error) {
             res.writeHead(500, { "Content-Type": "text/html; charset=utf-8" });
             res.end(
-              `<h3>Lỗi lưu giá gốc: ${escapeHtml(error.message)}</h3>`
+              `<h3>Lỗi lưu giá shop: ${escapeHtml(error.message)}</h3>`
             );
             return;
           }
@@ -341,7 +353,7 @@ export function startAdminAndHealthServer(): void {
         } catch (err) {
           console.error("Lỗi lưu base price:", err);
           res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
-          res.end("Lỗi máy chủ khi lưu giá gốc.");
+          res.end("Lỗi máy chủ khi lưu giá shop.");
         }
         return;
       }
@@ -369,7 +381,7 @@ export function startAdminAndHealthServer(): void {
             supabase
               .from("discord_items")
               .select(
-                "code, name, rarity, drop_rate, description, is_active, base_price, shop_enabled"
+                "code, name, rarity, drop_rate, description, is_active, base_price, base_sell_price, shop_buy_enabled, shop_sell_enabled"
               )
               .order("drop_rate", { ascending: false }),
             supabase
@@ -457,38 +469,38 @@ export function startAdminAndHealthServer(): void {
 
         const shopPriceRowsHtml = items
           .map((item) => {
-            const baseP = Math.max(0, Number(item.base_price ?? 0));
-            const enabled = item.shop_enabled !== false;
-            const defaultSell =
-              baseP > 0 ? Math.max(1, Math.floor(baseP * 0.8)) : 0;
+            const baseBuy = Math.max(0, Number(item.base_price ?? 0));
+            const baseSell = Math.max(0, Number(item.base_sell_price ?? 0));
+            const buyOn = item.shop_buy_enabled !== false;
+            const sellOn = item.shop_sell_enabled !== false;
             const live = shopPricingMap.get(item.code);
+
+            const statusText = `Mua: ${buyOn ? "Bật" : "Tắt"} | Bán: ${sellOn ? "Bật" : "Tắt"}`;
             const deltaText =
               live && live.changePercent !== 0
                 ? live.changePercent > 0
-                  ? `+${live.changePercent}%`
-                  : `${live.changePercent}%`
-                : "0%";
-            const currentLabel = !enabled
-              ? "Đã tắt bán"
-              : live && live.buyPrice > 0
-                ? `Mua ${live.buyPrice} / Bán ${live.sellPrice} (${deltaText})`
-                : baseP > 0
-                  ? `Mua ${baseP} / Bán ${defaultSell}`
-                  : "Chưa đặt giá";
+                  ? ` (+${live.changePercent}%)`
+                  : ` (${live.changePercent}%)`
+                : "";
+            const liveText = live
+              ? `${live.canBuy ? "Mua " + live.buyPrice : "Tắt mua"} / ${live.canSell ? "Bán " + live.sellPrice : "Tắt bán"}${deltaText}`
+              : "Chưa mở giao dịch";
 
             return [
               "<tr>",
               `  <td><strong>${escapeHtml(item.name)}</strong> <code>${escapeHtml(item.code)}</code></td>`,
-              `  <td><strong>${baseP}</strong></td>`,
-              `  <td>${defaultSell}</td>`,
-              `  <td>${enabled ? "Đang bật" : "Đã tắt"}</td>`,
-              `  <td style="color:#94a3b8;font-size:13px">${escapeHtml(currentLabel)}</td>`,
+              `  <td><strong>${baseBuy}</strong></td>`,
+              `  <td><strong>${baseSell}</strong></td>`,
+              `  <td>${escapeHtml(statusText)}</td>`,
+              `  <td style="color:#94a3b8;font-size:13px">${escapeHtml(liveText)}</td>`,
               "  <td>",
               '    <button type="button" class="btn-edit"',
               `      data-code="${escapeHtml(item.code)}"`,
               `      data-name="${escapeHtml(item.name)}"`,
-              `      data-base="${baseP}"`,
-              `      data-shop="${enabled ? "1" : "0"}"`,
+              `      data-buy="${baseBuy}"`,
+              `      data-sell="${baseSell}"`,
+              `      data-buyon="${buyOn ? "1" : "0"}"`,
+              `      data-sellon="${sellOn ? "1" : "0"}"`,
               '      onclick="editBasePrice(this)">Sửa giá</button>',
               "  </td>",
               "</tr>",
@@ -540,12 +552,22 @@ export function startAdminAndHealthServer(): void {
           "  document.getElementById('recipe-form-title').textContent = 'Thêm hoặc Sửa công thức gieo trồng';",
           "  document.getElementById('recipe-submit-btn').textContent = 'Lưu công thức trồng';",
           "}",
+          "function autoFillSellPrice() {",
+          "  var buyVal = parseInt(document.getElementById('p-buy').value || '0', 10);",
+          "  if (!isNaN(buyVal) && buyVal > 0) {",
+          "    document.getElementById('p-sell').value = Math.max(1, Math.floor(buyVal * 0.8));",
+          "  } else {",
+          "    document.getElementById('p-sell').value = 0;",
+          "  }",
+          "}",
           "function editBasePrice(btn) {",
           "  switchTab('shop');",
           "  document.getElementById('p-code').value = btn.dataset.code || '';",
-          "  document.getElementById('p-base').value = btn.dataset.base || '0';",
-          "  document.getElementById('p-shop').checked = btn.dataset.shop === '1';",
-          "  document.getElementById('price-form-title').textContent = 'Đặt giá gốc cho: ' + (btn.dataset.name || btn.dataset.code);",
+          "  document.getElementById('p-buy').value = btn.dataset.buy || '0';",
+          "  document.getElementById('p-sell').value = btn.dataset.sell || '0';",
+          "  document.getElementById('p-buy-on').checked = btn.dataset.buyon === '1';",
+          "  document.getElementById('p-sell-on').checked = btn.dataset.sellon === '1';",
+          "  document.getElementById('price-form-title').textContent = 'Cấu hình Shop cho: ' + (btn.dataset.name || btn.dataset.code);",
           "  document.getElementById('price-form').scrollIntoView({ behavior: 'smooth' });",
           "}",
           "</script>",
@@ -667,16 +689,20 @@ export function startAdminAndHealthServer(): void {
           '        <button type="submit" class="btn-submit" style="background:#10b981;color:#fff">Lưu cấu hình biến động</button>',
           "      </form>",
           '      <form id="price-form" class="card" method="POST" action="/admin/save-base-price">',
-          '        <h3 id="price-form-title" style="margin-top:0">Thiết lập giá gốc &amp; trạng thái bán trong Shop</h3>',
+          '        <h3 id="price-form-title" style="margin-top:0">Thiết lập giá gốc Mua/Bán &amp; Bật/Tắt riêng</h3>',
           `        <input type="hidden" name="password" value="${pwAttr}" />`,
           '        <div class="grid">',
           `          <div><label>Chọn vật phẩm</label><select id="p-code" name="item_code" required>${itemOptionsHtml}</select></div>`,
-          '          <div><label>Giá gốc (điểm — bán = 80%)</label><input type="number" id="p-base" name="base_price" min="0" value="0" required /></div>',
+          '          <div><label>Giá gốc Mua (điểm)</label><input type="number" id="p-buy" name="base_buy_price" min="0" value="0" oninput="autoFillSellPrice()" required /></div>',
+          '          <div><label>Giá gốc Bán (mặc định 80%, tự chỉnh được)</label><input type="number" id="p-sell" name="base_sell_price" min="0" value="0" required /></div>',
           "        </div>",
-          '        <div style="margin-top:12px"><label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="p-shop" name="shop_enabled" checked style="width:auto" /> Cho phép mua/bán vật phẩm này trong Shop</label></div>',
+          '        <div style="margin-top:12px;display:flex;gap:18px;flex-wrap:wrap">',
+          '          <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="p-buy-on" name="shop_buy_enabled" checked style="width:auto" /> Cho phép Mua trong Shop</label>',
+          '          <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="p-sell-on" name="shop_sell_enabled" checked style="width:auto" /> Cho phép Bán trong Shop</label>',
+          "        </div>",
           '        <button type="submit" class="btn-submit">Lưu thiết lập Shop</button>',
           "      </form>",
-          '      <div class="card"><h3 style="margin-top:0">Bảng giá gốc &amp; trạng thái bán</h3><div style="overflow-x:auto"><table><thead><tr><th>Vật phẩm</th><th>Giá gốc</th><th>Bán chuẩn (80%)</th><th>Trạng thái</th><th>Giá chu kỳ hiện tại</th><th>Thao tác</th></tr></thead><tbody>',
+          '      <div class="card"><h3 style="margin-top:0">Bảng giá gốc &amp; trạng thái Mua/Bán</h3><div style="overflow-x:auto"><table><thead><tr><th>Vật phẩm</th><th>Giá gốc Mua</th><th>Giá gốc Bán</th><th>Trạng thái</th><th>Giá chu kỳ hiện tại</th><th>Thao tác</th></tr></thead><tbody>',
           shopPriceRowsHtml ||
             '<tr><td colspan="6" style="color:#94a3b8">Chưa có vật phẩm nào.</td></tr>',
           "      </tbody></table></div></div>",
