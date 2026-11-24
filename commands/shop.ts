@@ -8,7 +8,7 @@ export const commandInfo: CommandMeta = {
   name: "shop",
   command: "!shop [buy <món> [sl] | sell <món> [sl]]",
   description:
-    "Xem bảng giá shop biến động theo chu kỳ, mua vật phẩm bằng điểm hoặc bán vật phẩm lấy điểm (80% giá mua).",
+    "Xem bảng giá shop biến động theo chu kỳ, mua vật phẩm bằng điểm hoặc bán vật phẩm lấy điểm.",
 };
 
 export async function execute(message: Message): Promise<void> {
@@ -32,9 +32,9 @@ export async function execute(message: Message): Promise<void> {
       ? snapshot.items.find((i) => i.code === itemDef.code)
       : undefined;
 
-    if (!itemDef || !shopItem || shopItem.buyPrice <= 0) {
+    if (!itemDef || !shopItem || !shopItem.canBuy || shopItem.buyPrice <= 0) {
       await message.reply(
-        `Không tìm thấy vật phẩm \`${query}\` đang mở bán trong shop.`
+        `Vật phẩm \`${query}\` hiện không mở bán trong shop.`
       );
       return;
     }
@@ -92,9 +92,14 @@ export async function execute(message: Message): Promise<void> {
       ? snapshot.items.find((i) => i.code === itemDef.code)
       : undefined;
 
-    if (!itemDef || !shopItem || shopItem.sellPrice <= 0) {
+    if (
+      !itemDef ||
+      !shopItem ||
+      !shopItem.canSell ||
+      shopItem.sellPrice <= 0
+    ) {
       await message.reply(
-        `Vật phẩm \`${query}\` hiện chưa được thiết lập giá bán trong shop.`
+        `Shop hiện không thu mua vật phẩm \`${query}\`.`
       );
       return;
     }
@@ -161,17 +166,19 @@ export async function execute(message: Message): Promise<void> {
   if (snapshot.items.length === 0) {
     embed.addFields({
       name: "Trống",
-      value: "Chưa có vật phẩm nào được mở bán trong shop.",
+      value: "Chưa có vật phẩm nào được mở giao dịch trong shop.",
     });
   } else {
     const blocks = snapshot.items.slice(0, 20).map((it) => {
+      const buyPart = it.canBuy ? `Mua: **${it.buyPrice}**` : "Mua: *Tắt*";
+      const sellPart = it.canSell ? `Bán: **${it.sellPrice}**` : "Bán: *Tắt*";
       const trend =
         it.changePercent > 0
           ? ` • 📈 **+${it.changePercent}%**`
           : it.changePercent < 0
             ? ` • 📉 **${it.changePercent}%**`
             : "";
-      return `**${it.name}**\nMua: **${it.buyPrice}** | Bán: **${it.sellPrice}**${trend}`;
+      return `**${it.name}**\n${buyPart} | ${sellPart}${trend}`;
     });
 
     embed.addFields({
