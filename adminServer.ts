@@ -434,4 +434,81 @@ export function startAdminAndHealthServer(): void {
           "          <label>Mô tả vật phẩm</label>",
           '          <input type="text" id="f-desc" name="description" placeholder="Mô tả hiển thị trong !bag info" />',
           "        </div>",
-       
+          '        <div style="margin-top:12px">',
+          '          <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">',
+          '            <input type="checkbox" id="f-active" name="is_active" checked style="width:auto" />',
+          "            Đang kích hoạt (cho phép rơi khi !pray)",
+          "          </label>",
+          "        </div>",
+          '        <button type="submit" id="item-submit-btn" class="btn-submit">Lưu vật phẩm</button>',
+          '        <button type="button" class="btn-reset" onclick="resetItemForm()">Nhập mới</button>',
+          "      </form>",
+          '      <div class="card">',
+          `        <h3 style="margin-top:0">Danh sách vật phẩm (Tổng tỉ lệ rơi: ${totalPctLabel}%)</h3>`,
+          '        <div style="overflow-x:auto">',
+          "          <table>",
+          "            <thead><tr><th>Mã</th><th>Tên</th><th>Độ hiếm</th><th>Tỉ lệ</th><th>Trạng thái</th><th>Mô tả</th><th>Thao tác</th></tr></thead>",
+          "            <tbody>",
+          rowsHtml ||
+            '<tr><td colspan="7" style="color:#94a3b8">Chưa có vật phẩm nào.</td></tr>',
+          "            </tbody>",
+          "          </table>",
+          "        </div>",
+          "      </div>",
+          "    </div>",
+          `    <div id="panel-recipes" class="tab-panel ${activeTab === "recipes" ? "active" : ""}">`,
+          '      <form id="recipe-form" class="card" method="POST" action="/admin/save-recipe">',
+          '        <h3 id="recipe-form-title" style="margin-top:0">Thêm hoặc Sửa công thức gieo trồng</h3>',
+          `        <input type="hidden" name="password" value="${pwAttr}" />`,
+          '        <div class="grid">',
+          "          <div>",
+          "            <label>Hạt giống (Item 1)</label>",
+          `            <select id="r-seed" name="seed_item_code" required>${itemOptionsHtml}</select>`,
+          "          </div>",
+          "          <div>",
+          "            <label>Nông sản thu hoạch (Item 2)</label>",
+          `            <select id="r-harvest" name="harvest_item_code" required>${itemOptionsHtml}</select>`,
+          "          </div>",
+          "          <div>",
+          "            <label>Số lượng nông sản thu</label>",
+          '            <input type="number" id="r-qty" name="harvest_quantity" min="1" value="1" required />',
+          "          </div>",
+          "          <div>",
+          "            <label>Thời gian lớn (giây)</label>",
+          '            <input type="number" id="r-grow" name="grow_seconds" min="5" value="120" required />',
+          "          </div>",
+          "        </div>",
+          '        <button type="submit" id="recipe-submit-btn" class="btn-submit" style="background:#10b981;color:#fff">Lưu công thức trồng</button>',
+          '        <button type="button" class="btn-reset" onclick="resetRecipeForm()">Nhập mới</button>',
+          "      </form>",
+          '      <div class="card">',
+          '        <h3 style="margin-top:0">Danh sách công thức gieo trồng</h3>',
+          '        <div style="overflow-x:auto">',
+          "          <table>",
+          "            <thead><tr><th>Hạt giống (Item 1)</th><th>Nông sản (Item 2)</th><th>Sản lượng</th><th>Thời gian lớn</th><th>Thao tác</th></tr></thead>",
+          "            <tbody>",
+          recipeRowsHtml ||
+            '<tr><td colspan="5" style="color:#94a3b8">Chưa có công thức gieo trồng nào.</td></tr>',
+          "            </tbody>",
+          "          </table>",
+          "        </div>",
+          "      </div>",
+          "    </div>",
+          "  </div>",
+          clientScript,
+          "</body>",
+          "</html>",
+        ].join("\n");
+
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(pageHtml);
+        return;
+      }
+
+      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Not Found");
+    })
+    .listen(port, () => {
+      console.log(`Server & trang quan tri dang chay tai cong ${port}`);
+    });
+}
