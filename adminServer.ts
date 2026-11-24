@@ -356,7 +356,6 @@ export function startAdminAndHealthServer(): void {
       </button>
     </div>
 
-    <!-- TAB 1: VẬT PHẨM -->
     <div id="panel-items" class="tab-panel ${activeTab === "items" ? "active" : ""}">
       <form id="item-form" class="card" method="POST" action="/admin/save">
         <h3 id="item-form-title" style="margin-top:0">Thêm mới hoặc Cập nhật vật phẩm</h3>
@@ -421,7 +420,6 @@ export function startAdminAndHealthServer(): void {
       </div>
     </div>
 
-    <!-- TAB 2: CÔNG THỨC TRỒNG TRỌT -->
     <div id="panel-recipes" class="tab-panel ${activeTab === "recipes" ? "active" : ""}">
       <form id="recipe-form" class="card" method="POST" action="/admin/save-recipe">
         <h3 id="recipe-form-title" style="margin-top:0">Thêm hoặc Sửa công thức gieo trồng</h3>
@@ -485,4 +483,5 @@ export function startAdminAndHealthServer(): void {
       document.getElementById('f-rarity').value = btn.dataset.rarity || 'Thường';
       document.getElementById('f-pct').value = btn.dataset.pct || '0';
       document.getElementById('f-desc').value = btn.dataset.desc || '';
-      document.getElementById('f-active').checked = btn.d
+      document.getElementById('f-active').checked = btn.dataset.active === '1';
+      document.getElementById('item-form-title'
