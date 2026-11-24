@@ -11,16 +11,6 @@ export const commandInfo: CommandMeta = {
     "Xem bảng giá shop biến động theo chu kỳ, mua vật phẩm bằng điểm hoặc bán vật phẩm lấy điểm (80% giá mua).",
 };
 
-function formatCountdown(totalSec: number): string {
-  const s = Math.max(0, Math.floor(totalSec));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  if (h > 0) return `${h}g ${m}p ${sec}s`;
-  if (m > 0) return `${m}p ${sec}s`;
-  return `${sec}s`;
-}
-
 export async function execute(message: Message): Promise<void> {
   const rawArgs = message.content
     .trim()
@@ -161,10 +151,7 @@ export async function execute(message: Message): Promise<void> {
   const embed = new EmbedBuilder()
     .setColor(0xf59e0b)
     .setTitle("Cửa Hàng — Hoạ Đồ Thiên Niên Mộng")
-    .setDescription(
-      `Điểm của bạn: **${userPoints}** • Đổi giá sau: **${formatCountdown(snapshot.secondsUntilNextCycle)}**\n` +
-        `Giá bán mặc định = **80%** giá mua • Biến động: **${snapshot.config.randomItemCount}** món ngẫu nhiên (±**${snapshot.config.maxChangePercent}%**)`
-    )
+    .setDescription(`Điểm của bạn: **${userPoints}**`)
     .setFooter({
       text: "Mua: !shop buy <tên> [sl] • Bán: !shop sell <tên> [sl]",
       iconURL: message.client.user?.displayAvatarURL(),
@@ -174,26 +161,25 @@ export async function execute(message: Message): Promise<void> {
   if (snapshot.items.length === 0) {
     embed.addFields({
       name: "Trống",
-      value:
-        "Chưa có vật phẩm nào được đặt giá gốc (`base_price > 0`). Hãy vào Tab 3 của `/admin` để thiết lập nhé!",
+      value: "Chưa có vật phẩm nào được mở bán trong shop.",
     });
   } else {
-    const lines = snapshot.items.slice(0, 20).map((it) => {
-      const badge =
+    const blocks = snapshot.items.slice(0, 20).map((it) => {
+      const trend =
         it.changePercent > 0
-          ? ` 📈 **+${it.changePercent}%**`
+          ? ` • 📈 **+${it.changePercent}%**`
           : it.changePercent < 0
-            ? ` 📉 **${it.changePercent}%**`
+            ? ` • 📉 **${it.changePercent}%**`
             : "";
-      return `• **${it.name}** *(gốc: ${it.basePrice})* — Mua: **${it.buyPrice}** | Bán: **${it.sellPrice}**${badge}`;
+      return `**${it.name}**\nMua: **${it.buyPrice}** | Bán: **${it.sellPrice}**${trend}`;
     });
 
     embed.addFields({
-      name: "Bảng giá hiện tại",
-      value: lines.join("\n"),
+      name: "Danh sách vật phẩm",
+      value: blocks.join("\n\n"),
       inline: false,
     });
   }
 
   await message.reply({ embeds: [embed] });
-        }
+}
